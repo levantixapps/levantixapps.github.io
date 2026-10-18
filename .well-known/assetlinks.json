@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.levantixapps.yawmi",
+    "sha256_cert_fingerprints": ["B0:BD:18:D4:0E:31:4F:16:62:62:44:E9:8D:98:C2:58:24:73:35:84:55:F4:B2:4D:99:C1:D8:66:23:65:6C:E8"]
+  }
+}]
