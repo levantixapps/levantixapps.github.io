@@ -68,6 +68,16 @@ h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 .soon { border-style: dashed; justify-content: center; text-align: center; color: var(--muted); min-height: 160px; }
 .soon b { font-family: var(--font-display); color: var(--ink); font-size: 1.1rem; }
 
+.install { margin-top: 56px; }
+.install .lead { margin: -6px 0 18px; color: var(--muted); }
+.steps3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.how { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.how h3 { margin: 0; font-family: var(--font-display); font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
+.how ol { margin: 0; padding-inline-start: 20px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+.how ol b { color: var(--ink); }
+.how .btn { align-self: flex-start; margin-top: auto; }
+.key { display: inline-block; min-width: 1.6em; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 0 4px; color: var(--ink); background: var(--navy-2); }
+.hint { margin-top: 16px; color: var(--muted); font-size: .9rem; }
 footer { border-top: 1px solid var(--line); margin-top: 56px; padding-top: 22px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; color: var(--muted); font-size: .9rem; }
 footer span:last-child { direction: ltr; }
 
@@ -109,6 +119,7 @@ footer span:last-child { direction: ltr; }
         </ul>
         <div class="actions">
           <a class="btn" href="https://levantixapps.github.io/yawmi/">افتح التطبيق</a>
+          <a class="link" href="#install">طريقة التثبيت</a>
           <a class="link" href="https://levantixapps.github.io/yawmi/privacy.html">سياسة الخصوصية</a>
         </div>
       </article>
@@ -117,6 +128,43 @@ footer span:last-child { direction: ltr; }
         <span>تطبيقات جديدة في الطريق، إن شاء الله.</span>
       </article>
     </div>
+  </section>
+
+  <section class="install" id="install" aria-labelledby="h-install">
+    <h2 id="h-install">ثبّت «يومي» على جهازك</h2>
+    <p class="lead">مجانًا ومن دون متجر: يُثبَّت كتطبيق بأيقونته على الشاشة الرئيسية، ويفتح بملء الشاشة، ويعمل بدون إنترنت.</p>
+    <div class="steps3">
+      <article class="how">
+        <h3><span class="os">🍎</span> آيفون وآيباد</h3>
+        <ol>
+          <li>افتح الرابط في متصفح <b>Safari</b> (التثبيت لا يعمل من Chrome على الآيفون).</li>
+          <li>اضغط زر <b>المشاركة</b> <span class="key">⬆</span> أسفل الشاشة.</li>
+          <li>اختر <b>«إضافة إلى الشاشة الرئيسية»</b> ثم <b>«إضافة»</b>.</li>
+          <li>افتح «يومي» دائمًا من أيقونته، لا من Safari.</li>
+        </ol>
+        <a class="btn" href="https://levantixapps.github.io/yawmi/">افتح «يومي»</a>
+      </article>
+      <article class="how">
+        <h3><span class="os">🤖</span> أندرويد</h3>
+        <ol>
+          <li>افتح الرابط في متصفح <b>Chrome</b>.</li>
+          <li>اضغط <span class="key">⋮</span> أعلى الشاشة.</li>
+          <li>اختر <b>«تثبيت التطبيق»</b> أو <b>«إضافة إلى الشاشة الرئيسية»</b>.</li>
+          <li>اضغط <b>«تثبيت»</b>.</li>
+        </ol>
+        <a class="btn" href="https://levantixapps.github.io/yawmi/">افتح «يومي»</a>
+      </article>
+      <article class="how">
+        <h3><span class="os">💻</span> الحاسوب</h3>
+        <ol>
+          <li>افتح الرابط في <b>Chrome</b> أو <b>Edge</b>.</li>
+          <li>اضغط أيقونة التثبيت <span class="key">⊕</span> في شريط العنوان.</li>
+          <li>اضغط <b>«تثبيت»</b>، فيظهر في قائمة البرامج.</li>
+        </ol>
+        <a class="btn" href="https://levantixapps.github.io/yawmi/">افتح «يومي»</a>
+      </article>
+    </div>
+    <p class="hint">لربط جهاز جديد بحسابك: على جهازك الأول ⚙ ← «ربط جهاز جديد»، ثم اكتب الرمز في الجهاز الجديد من داخل التطبيق.</p>
   </section>
 
   <footer>
