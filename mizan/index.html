@@ -132,6 +132,11 @@ table.stmt td { white-space: normal; }
 table.stmt + table.stmt { margin-top: 12px; }
 table.stmt tr.grp td { font-weight: 600; color: var(--accent); border-bottom: 1px solid var(--rule); padding-top: 12px; }
 table.stmt tr.sub td { font-weight: 600; }
+table.stmt tr.gp td { font-weight: 700; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+.ei-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.ei-row label { font-weight: 600; }
+.ei-row input { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 5px 10px; width: 150px; max-width: 100%; }
+.ei-hint { font-size: 13px; color: var(--err); }
 .notes { margin: 4px 0 0; padding-inline-start: 18px; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
 
 .scroll { overflow-x: auto; }
@@ -208,7 +213,17 @@ td select.unk { border-color: var(--warn); color: var(--warn); }
         <button type="button" role="tab" data-tab="fin" aria-selected="false">القوائم المالية</button>
       </div>
       <div class="sheet" id="tab-ledger" hidden><h2>دفتر الأستاذ</h2><div id="ledger"></div></div>
-      <div class="col" id="tab-fin" hidden><div class="col" id="fin"></div></div>
+      <div class="col" id="tab-fin" hidden>
+        <div class="sheet">
+          <div class="ei-row">
+            <label for="endInv">مخزون آخر المدة</label>
+            <input id="endInv" inputmode="decimal" autocomplete="off" placeholder="مثال: 6000">
+            <span class="ei-hint" id="endInvHint" role="status"></span>
+          </div>
+          <p class="sub">اختياري. أدخله إذا ذكرته المسألة لتظهر تكلفة البضاعة المباعة ومجمل الربح.</p>
+        </div>
+        <div class="col" id="fin"></div>
+      </div>
       <div class="col" id="tab-check">
       <div class="sheet"><h2>أين الخطأ</h2><div id="findings"></div></div>
       <div class="sheet"><h2 id="tableTitle">ميزان المراجعة</h2><div class="scroll" id="table"></div></div>
@@ -510,15 +525,32 @@ function buildLedger(journalText) {
   }
   return [...map.values()];
 }
-function buildStatements(rows) {
-  const pick = (c, sign) => rows.filter(r => r.cls === c && r.net).map(r => ({ account: r.account, amt: sign * r.net }));
+function parseAmount(s) {
+  const t = normDigits(String(s == null ? '' : s)).trim();
+  if (!t) return null;
+  return NUM.test(t) ? Math.round(parseFloat(t.replace(/,/g, '')) * 100) : NaN;
+}
+const isInventory = r => r.cls === 'A' && /بضاعه|مخزون/.test(r.key);
+const isSales = r => r.cls === 'R' && r.key.includes('مبيعات');
+const isPurchase = r => r.cls === 'X' && r.key.includes('مشتريات');
+/* endInv: ending inventory in cents, or null when it was not entered. */
+function buildStatements(rows, endInv) {
+  const live = rows.filter(r => r.net);
+  const list = (test, sign) => live.filter(test).map(r => ({ account: r.account, amt: sign * r.net }));
   const total = l => l.reduce((a, x) => a + x.amt, 0);
-  const rev = pick('R', -1), exp = pick('X', 1), assets = pick('A', 1), liab = pick('L', -1), capital = pick('E', -1);
-  const unknown = rows.filter(r => r.cls === 'U' && r.net);
-  const TR = total(rev), TX = total(exp), NI = TR - TX;
-  const equity = capital.concat(rows.some(r => r.net && (r.cls === 'R' || r.cls === 'X')) ? [{ account: NI < 0 ? 'صافي خسارة الفترة' : 'صافي ربح الفترة', amt: NI }] : []);
+  const hasEI = endInv !== null && endInv !== undefined;
+  const rev = list(r => r.cls === 'R', -1), exp = list(r => r.cls === 'X', 1), liab = list(r => r.cls === 'L', -1), capital = list(r => r.cls === 'E', -1);
+  const unknown = live.filter(r => r.cls === 'U');
+  const opening = hasEI ? list(isInventory, 1) : [];
+  const assets = list(r => r.cls === 'A' && !(hasEI && isInventory(r)), 1).concat(hasEI && endInv ? [{ account: 'مخزون آخر المدة', amt: endInv }] : []);
+  const sales = list(isSales, -1), otherRev = list(r => r.cls === 'R' && !isSales(r), -1);
+  const purch = list(isPurchase, 1), otherExp = list(r => r.cls === 'X' && !isPurchase(r), 1);
+  const NS = total(sales), avail = total(opening) + total(purch), COGS = hasEI ? avail - endInv : 0, GP = NS - COGS;
+  const TOR = total(otherRev), TOX = total(otherExp), TR = total(rev), TX = total(exp);
+  const NI = hasEI ? GP + TOR - TOX : TR - TX;
+  const equity = capital.concat(live.some(r => r.cls === 'R' || r.cls === 'X') || hasEI ? [{ account: NI < 0 ? 'صافي خسارة الفترة' : 'صافي ربح الفترة', amt: NI }] : []);
   const TA = total(assets), TL = total(liab), TE = total(equity);
-  return { rev, exp, TR, TX, NI, assets, liab, equity, TA, TL, TE, TLE: TL + TE, unknown, purchases: rows.some(r => r.net && r.key.includes('مشتريات')) };
+  return { hasEI, endInv, rev, exp, TR, TX, NI, assets, liab, equity, TA, TL, TE, TLE: TL + TE, unknown, sales, NS, opening, purch, avail, COGS, GP, otherRev, otherExp, TOR, TOX, purchases: live.some(isPurchase) };
 }
 const LEVELS = ['مبتدئ', 'متوسط', 'متقدم'];
 const EX_DATA = [
@@ -729,7 +761,7 @@ function readLocal() { try { return JSON.parse(localStorage.getItem(LOCAL_KEY) |
 function writeLocal() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify([...problems.values()])); } catch (e) {} }
 
 function persist(p) {
-  const body = { title: p.title, journal: p.journal, trial: p.trial, classes: p.classes, updatedAt: p.updatedAt, exId: p.exId || null };
+  const body = { title: p.title, journal: p.journal, trial: p.trial, classes: p.classes, updatedAt: p.updatedAt, exId: p.exId || null, endInv: p.endInv || '' };
   chain = chain.then(async () => {
     if (!coll) { writeLocal(); setStatus('محفوظة على هذا الجهاز'); return; }
     try { await coll.doc(p.id).set(body); setStatus('محفوظة'); }
@@ -755,7 +787,7 @@ function renderPicker() {
 }
 function openProblem(p) {
   flush(); current = p; showSol = false;
-  $('title').value = p.title; $('journal').value = p.journal; $('trial').value = p.trial;
+  $('title').value = p.title; $('journal').value = p.journal; $('trial').value = p.trial; $('endInv').value = p.endInv || '';
   renderPicker(); render();
 }
 function twoStep(id, label, action, needed) {
@@ -828,6 +860,11 @@ function render() {
       `<tr class="${x.bad ? 'bad' : ''}"><td class="nm">${esc(x.account)}</td><td><select data-key="${esc(x.key)}" aria-label="نوع ${esc(x.account)}" class="${x.cls === 'U' ? 'unk' : ''}">${opts(x.cls)}</select></td><td class="n">${x.net > 0 ? money(x.net) : ''}</td><td class="n">${x.net < 0 ? money(-x.net) : ''}</td>${cmp ? `<td class="n">${x.correct ? money(Math.abs(x.correct)) + ' ' + (x.correct > 0 ? 'م' : 'د') : '—'}</td><td><span class="chip ${x.bad ? 'err' : 'good'}">${x.bad ? 'خطأ' : 'مطابق'}</span></td>` : ''}</tr>`).join('')}</tbody><tfoot><tr><td colspan="2">المجموع</td><td class="n">${money(r.TD)}</td><td class="n">${money(r.TC)}</td>${cmp ? '<td></td><td></td>' : ''}</tr></tfoot></table>`;
 
   const fig = (l, c) => `<div class="fig"><span>${l}</span><b>${c < 0 ? '(' + money(-c) + ')' : money(c)}</b></div>`;
+  const eqEI = parseAmount(current.endInv);
+  if (eqEI !== null && !Number.isNaN(eqEI)) {
+    const adj = eqEI - r.rows.filter(isInventory).reduce((a, x) => a + x.net, 0);
+    r.eq.A += adj; r.eq.NI += adj;
+  }
   $('eq').innerHTML = !r.rows.length ? '<p class="none">الأصول = الخصوم + حقوق الملكية + صافي الربح</p>' :
     fig('الأصول', r.eq.A) + '<i>=</i>' + fig('الخصوم', r.eq.L) + '<i>+</i>' + fig('حقوق الملكية', r.eq.E) + '<i>+</i>' + fig('صافي الربح', r.eq.NI) + (r.eq.U ? fig('غير مصنف', r.eq.U) : '');
   renderEx(ex, chk);
@@ -843,7 +880,9 @@ function renderBooks(r) {
     }).join('')}</div>`;
 
   const src = r.hasJ ? analyze(current.journal, '', current.classes) : r;
-  const f = buildStatements(src.rows);
+  const parsedEI = parseAmount(current.endInv), badEI = Number.isNaN(parsedEI), ei = badEI ? null : parsedEI;
+  $('endInvHint').textContent = badEI ? 'اكتب رقماً فقط، مثل 6000.' : '';
+  const f = buildStatements(src.rows, ei);
   const amt = c => c < 0 ? `(${money(-c)})` : money(c);
   const rowsOf = l => l.map(x => `<tr><td>${esc(x.account)}</td><td class="n">${amt(x.amt)}</td></tr>`).join('');
   const group = t => `<tr class="grp"><td colspan="2">${t}</td></tr>`;
@@ -856,9 +895,18 @@ function renderBooks(r) {
   notes.push(r.hasJ ? 'محسوبة تلقائياً من خانة القيود.' : 'محسوبة من الميزان الذي كتبته، لعدم وجود قيود.');
   if (src.S) notes.push(`القيود غير متوازنة بفرق ${money(Math.abs(src.S))}، فالقوائم غير نهائية حتى تصحيحها.`);
   if (f.unknown.length) notes.push(`لم تدخل في القوائم حسابات غير معروفة النوع: ${f.unknown.map(u => u.account).join('، ')}. حدد نوعها من جدول الميزان.`);
-  if (f.purchases) notes.push('ظهرت المشتريات ضمن المصروفات، ولم يُحتسب مخزون آخر المدة لأنه غير مدخل، فقد يختلف الربح عن حل الكتاب.');
+  if (!f.hasEI && f.purchases) notes.push('ظهرت المشتريات ضمن المصروفات لأن مخزون آخر المدة غير مدخل. أدخله في الخانة أعلاه لحساب تكلفة البضاعة ومجمل الربح.');
+  if (f.hasEI && f.opening.length) notes.push(`عُدّ حساب «${f.opening.map(x => x.account).join('» و«')}» بضاعة أول المدة، وحلّ مكانه مخزون آخر المدة في الأصول.`);
+  const statement = f.hasEI
+    ? group('المبيعات') + rowsOf(f.sales) + sub('صافي المبيعات', f.NS)
+      + group('تكلفة البضاعة المباعة') + rowsOf(f.opening.map(x => ({ account: x.account + ' (أول المدة)', amt: x.amt }))) + rowsOf(f.purch) + sub('البضاعة المتاحة للبيع', f.avail)
+      + `<tr><td>يُطرح: مخزون آخر المدة</td><td class="n">${amt(-f.endInv)}</td></tr>` + sub('تكلفة البضاعة المباعة', f.COGS)
+      + `<tr class="gp"><td>${f.GP < 0 ? 'مجمل الخسارة' : 'مجمل الربح'}</td><td class="n">${amt(f.GP)}</td></tr>`
+      + (f.otherRev.length ? group('إيرادات أخرى') + rowsOf(f.otherRev) + sub('مجموع الإيرادات الأخرى', f.TOR) : '')
+      + group('المصروفات التشغيلية') + rowsOf(f.otherExp) + sub('مجموع المصروفات التشغيلية', f.TOX)
+    : group('الإيرادات') + rowsOf(f.rev) + sub('مجموع الإيرادات', f.TR) + group('المصروفات') + rowsOf(f.exp) + sub('مجموع المصروفات', f.TX);
   const balanced = f.TA === f.TLE;
-  $('fin').innerHTML = `<div class="sheet"><h2>قائمة الدخل</h2><div class="scroll"><table class="stmt"><tbody>${group('الإيرادات')}${rowsOf(f.rev)}${sub('مجموع الإيرادات', f.TR)}${group('المصروفات')}${rowsOf(f.exp)}${sub('مجموع المصروفات', f.TX)}</tbody><tfoot><tr><td>${f.NI < 0 ? 'صافي الخسارة' : 'صافي الربح'}</td><td class="n">${amt(f.NI)}</td></tr></tfoot></table></div></div>
+  $('fin').innerHTML = `<div class="sheet"><h2>قائمة الدخل</h2><div class="scroll"><table class="stmt"><tbody>${statement}</tbody><tfoot><tr><td>${f.NI < 0 ? 'صافي الخسارة' : 'صافي الربح'}</td><td class="n">${amt(f.NI)}</td></tr></tfoot></table></div></div>
   <div class="sheet"><div class="ex-head"><h2>الميزانية العمومية</h2><span class="chip ${balanced ? 'good' : 'err'}">${balanced ? 'متوازنة' : 'غير متوازنة'}</span></div><div class="scroll"><table class="stmt"><tbody>${group('الأصول')}${rowsOf(f.assets)}</tbody><tfoot><tr><td>مجموع الأصول</td><td class="n">${amt(f.TA)}</td></tr></tfoot></table><table class="stmt"><tbody>${group('الخصوم')}${rowsOf(f.liab)}${sub('مجموع الخصوم', f.TL)}${group('حقوق الملكية')}${rowsOf(f.equity)}${sub('مجموع حقوق الملكية', f.TE)}</tbody><tfoot><tr><td>مجموع الخصوم وحقوق الملكية</td><td class="n">${amt(f.TLE)}</td></tr></tfoot></table></div><ul class="notes">${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>`;
 }
 
@@ -899,7 +947,11 @@ const stepEx = d => {
 $('exPrev').addEventListener('click', () => stepEx(-1));
 $('exNext').addEventListener('click', () => stepEx(1));
 $('showSol').addEventListener('click', () => { showSol = !showSol; render(); });
-twoStep('clear', 'تأكيد التفريغ', () => { setAnswer('', ''); $('journal').focus(); setStatus('فُرّغت الخانات'); }, () => current.journal || current.trial);
+$('endInv').addEventListener('input', e => {
+  current.endInv = e.target.value; edited();
+  clearTimeout(timer); timer = setTimeout(render, 90);
+});
+twoStep('clear', 'تأكيد التفريغ', () => { current.endInv = ''; $('endInv').value = ''; setAnswer('', ''); $('journal').focus(); setStatus('فُرّغت الخانات'); }, () => current.journal || current.trial || current.endInv);
 twoStep('fillSol', 'تأكيد الاستبدال', () => { const x = EX_BY_ID[current.exId]; if (x) setAnswer(x.sol, current.trial); }, () => current.journal);
 twoStep('del', 'تأكيد الحذف', () => {
   clearTimeout(saveTimer); saveTimer = null;
