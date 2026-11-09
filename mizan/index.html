@@ -91,6 +91,19 @@ button.find-in:hover { background: var(--paper); }
 .chip.good { color: var(--ok); background: var(--ok-bg); }
 .none { margin: 0; color: var(--muted); }
 
+[hidden] { display: none !important; }
+.ex-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.ex-row { display: flex; flex-wrap: wrap; gap: 8px; }
+#exPick { flex: 1 1 170px; min-width: 0; background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 10px; }
+.ex-body { display: grid; gap: 10px; }
+.ex-ops { margin: 0; padding-inline-start: 24px; display: grid; gap: 4px; }
+.ex-ops li.done { color: var(--ok); text-decoration: line-through; text-decoration-thickness: 1px; }
+.ex-acc-wrap { display: grid; gap: 4px; }
+.ex-acc { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.ex-acc li { font-size: 13px; background: var(--paper); border-radius: 3px; padding: 1px 8px; }
+.sol { display: grid; gap: 8px; }
+.sol pre { margin: 0; font-family: var(--body); background: var(--paper); border-radius: 3px; padding: 8px 12px; white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
+
 .scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -117,6 +130,7 @@ td select.unk { border-color: var(--warn); color: var(--warn); }
       <input id="title" aria-label="اسم المسألة" placeholder="اسم المسألة" maxlength="80">
       <button class="btn main" id="new" type="button">مسألة جديدة</button>
       <button class="btn" id="sample" type="button">مثال</button>
+      <button class="btn" id="clear" type="button">تفريغ الخانات</button>
       <button class="btn" id="del" type="button">حذف</button>
       <span id="status" role="status"></span>
     </div>
@@ -124,6 +138,26 @@ td select.unk { border-color: var(--warn); color: var(--warn); }
 
   <main class="work">
     <section class="col" aria-label="إدخال المسألة">
+      <div class="sheet">
+        <div class="ex-head"><h2><label for="exPick">بنك التمارين</label></h2><span class="sub" id="exProgress"></span></div>
+        <div class="ex-row">
+          <select id="exPick"></select>
+          <button class="btn" id="exPrev" type="button">السابق</button>
+          <button class="btn" id="exNext" type="button">التالي</button>
+        </div>
+        <div class="ex-body" id="exBody" hidden>
+          <ol class="ex-ops" id="exOps"></ol>
+          <div class="ex-acc-wrap">
+            <p class="sub">الحسابات المستخدمة</p>
+            <ul class="ex-acc" id="exAcc"></ul>
+          </div>
+          <div class="ex-row"><button class="btn" id="showSol" type="button">عرض الحل</button></div>
+          <div class="sol" id="solBox" hidden>
+            <pre id="exSol"></pre>
+            <div class="ex-row"><button class="btn" id="fillSol" type="button">تفريغ الحل في القيود</button></div>
+          </div>
+        </div>
+      </div>
       <div class="sheet">
         <h2><label for="journal">القيود</label></h2>
         <textarea id="journal" spellcheck="false" placeholder="م الصندوق 5000&#10;د رأس المال 5000"></textarea>
@@ -170,7 +204,7 @@ const RULES = [
   ['اوراق قبض', 'A'], ['سندات قبض', 'A'], ['شيكات', 'A'], ['سندات', 'L'],
   ['صندوق', 'A'], ['نقد', 'A'], ['بنك', 'A'], ['مصرف', 'A'], ['مدين', 'A'], ['عملاء', 'A'], ['عميل', 'A'], ['بضاعه', 'A'], ['مخزون', 'A'],
   ['الات', 'A'], ['معدات', 'A'], ['اثاث', 'A'], ['مباني', 'A'], ['مبني', 'A'], ['اراضي', 'A'], ['ارض', 'A'], ['سيارات', 'A'], ['سياره', 'A'], ['اجهزه', 'A'], ['تجهيزات', 'A'], ['شهره', 'A'], ['استثمار', 'A'], ['لوازم', 'A'],
-  ['راس مال', 'E'], ['راسمال', 'E'], ['احتياطي', 'E'], ['جاري شريك', 'E'],
+  ['ملخص دخل', 'E'], ['راس مال', 'E'], ['راسمال', 'E'], ['احتياطي', 'E'], ['جاري شريك', 'E'],
 ];
 
 function normDigits(s) {
@@ -189,7 +223,7 @@ function classify(key, overrides) {
   if (o && o !== base.cls) return o === 'U' ? { cls: 'U', normal: null } : { cls: o, normal: NORMAL_OF[o] };
   return base;
 }
-function money(c) { return (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+function money(c) { return ((c / 100) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
 
 function parseLine(raw, line) {
   let s = normDigits(raw.replace(/\r/g, ''));
@@ -398,6 +432,7 @@ function analyze(journalText, trialText, overrides) {
   for (const r of abnormal) {
     if (flagged.has(r.key)) continue;
     add(hasT ? 'likely' : 'check', `«${r.account}» رصيده في غير جانبه`, `رصيده ${SIDE_LABEL[r.net > 0 ? 'D' : 'C']}، والمعتاد لهذا الحساب أن يكون ${SIDE_LABEL[r.normal]}.`, r.box, r.line);
+    findings[findings.length - 1].abn = true;
   }
 
   if (hasT && !hasJ && S) {
@@ -424,6 +459,193 @@ function analyze(journalText, trialText, overrides) {
   findings.sort((a, b) => order[a.lv] - order[b.lv]);
   return { findings, rows, TD, TC, S, eq, hasJ, hasT, entries: entries.length };
 }
+const LEVELS = ['مبتدئ', 'متوسط', 'متقدم'];
+const EX_DATA = [
+  ['مبتدئ', 'بداية نشاط تجاري', [
+    ['بدأ المالك نشاطه بإيداع 80,000 نقداً في الصندوق.', 'م الصندوق 80000|د رأس المال 80000'],
+    ['أودع 30,000 من الصندوق في البنك.', 'م البنك 30000|د الصندوق 30000'],
+    ['اشترى أثاثاً نقداً بمبلغ 7,000.', 'م الأثاث 7000|د الصندوق 7000'],
+    ['دفع إيجار الشهر نقداً 1,500.', 'م مصروف الإيجار 1500|د الصندوق 1500'],
+    ['باع بضاعة نقداً بمبلغ 6,000.', 'م الصندوق 6000|د المبيعات 6000'],
+  ]],
+  ['مبتدئ', 'الشراء والبيع بالآجل', [
+    ['اشترى بضاعة بالآجل من أحد الموردين بمبلغ 20,000.', 'م المشتريات 20000|د الموردون 20000'],
+    ['اشترى بضاعة نقداً بمبلغ 5,000.', 'م المشتريات 5000|د الصندوق 5000'],
+    ['باع بضاعة بالآجل لأحد العملاء بمبلغ 12,000.', 'م العملاء 12000|د المبيعات 12000'],
+    ['حصّل من العميل 7,000 نقداً.', 'م الصندوق 7000|د العملاء 7000'],
+    ['سدد للمورد 9,000 بشيك على البنك.', 'م الموردون 9000|د البنك 9000'],
+  ]],
+  ['مبتدئ', 'مصروفات وإيرادات', [
+    ['دفع الرواتب نقداً 4,200.', 'م الرواتب 4200|د الصندوق 4200'],
+    ['دفع فاتورة الكهرباء بشيك 350.', 'م مصروف الكهرباء 350|د البنك 350'],
+    ['قبض عمولة نقداً 900.', 'م الصندوق 900|د إيراد العمولات 900'],
+    ['دفع مصروف دعاية نقداً 600.', 'م مصروف الدعاية 600|د الصندوق 600'],
+    ['قبض إيجار محل يملكه بشيك 2,000 أودع في البنك.', 'م البنك 2000|د إيراد الإيجار 2000'],
+  ]],
+  ['مبتدئ', 'القروض والمسحوبات', [
+    ['حصل على قرض من البنك 40,000 أودع في حسابه.', 'م البنك 40000|د قرض بنكي 40000'],
+    ['اشترى سيارة للنشاط بشيك 25,000.', 'م السيارات 25000|د البنك 25000'],
+    ['سحب المالك 3,000 نقداً لاستعماله الشخصي.', 'م المسحوبات 3000|د الصندوق 3000'],
+    ['سدد قسطاً من القرض بشيك 5,000.', 'م قرض بنكي 5000|د البنك 5000'],
+    ['دفع فوائد القرض بشيك 800.', 'م مصروف الفوائد 800|د البنك 800'],
+  ]],
+  ['مبتدئ', 'زيادة رأس المال والأصول', [
+    ['زاد المالك رأس المال بإيداع 15,000 في البنك.', 'م البنك 15000|د رأس المال 15000'],
+    ['اشترى آلات بالآجل بمبلغ 18,000 من شركة غير الموردين المعتادين.', 'م الآلات 18000|د الدائنون 18000'],
+    ['سدد للشركة 6,000 نقداً.', 'م الدائنون 6000|د الصندوق 6000'],
+    ['اشترى قرطاسية للمكتب نقداً 400، وتعد مصروفاً.', 'م مصروف القرطاسية 400|د الصندوق 400'],
+    ['باع جزءاً من الأثاث نقداً بقيمته الدفترية 2,000.', 'م الصندوق 2000|د الأثاث 2000'],
+  ]],
+  ['مبتدئ', 'مكتب خدمات', [
+    ['أسس محاسب مكتباً بإيداع 25,000 في البنك.', 'م البنك 25000|د رأس المال 25000'],
+    ['اشترى أجهزة حاسوب بشيك 6,000.', 'م الأجهزة 6000|د البنك 6000'],
+    ['قدم خدمات لعميل بالآجل بمبلغ 4,000.', 'م العملاء 4000|د إيراد الخدمات 4000'],
+    ['قبض من العميل 2,500 بشيك أودع في البنك.', 'م البنك 2500|د العملاء 2500'],
+    ['دفع إيجار المكتب بشيك 1,100.', 'م مصروف الإيجار 1100|د البنك 1100'],
+  ]],
+  ['مبتدئ', 'متجر صغير', [
+    ['بدأ التاجر نشاطه بمبلغ 15,000 نقداً.', 'م الصندوق 15000|د رأس المال 15000'],
+    ['اشترى بضاعة نقداً 4,000.', 'م المشتريات 4000|د الصندوق 4000'],
+    ['باع بضاعة نقداً 2,500.', 'م الصندوق 2500|د المبيعات 2500'],
+    ['باع بضاعة بالآجل 1,800.', 'م العملاء 1800|د المبيعات 1800'],
+    ['دفع فاتورة الكهرباء نقداً 120.', 'م مصروف الكهرباء 120|د الصندوق 120'],
+  ]],
+  ['متوسط', 'القيود المركبة', [
+    ['اشترى بضاعة بمبلغ 10,000، دفع منها 4,000 نقداً والباقي بالآجل من المورد.', 'م المشتريات 10000|د الصندوق 4000|د الموردون 6000'],
+    ['باع بضاعة بمبلغ 15,000، قبض منها 5,000 بشيك أودع في البنك والباقي بالآجل.', 'م البنك 5000|م العملاء 10000|د المبيعات 15000'],
+    ['قدّم شريك حصته في رأس المال: 20,000 نقداً وأثاثاً بقيمة 10,000.', 'م الصندوق 20000|م الأثاث 10000|د رأس المال 30000'],
+    ['دفع نقداً الرواتب 3,000 وإيجار الشهر 1,000.', 'م الرواتب 3000|م مصروف الإيجار 1000|د الصندوق 4000'],
+  ]],
+  ['متوسط', 'مردودات المشتريات والمبيعات', [
+    ['باع بضاعة بالآجل بمبلغ 9,000.', 'م العملاء 9000|د المبيعات 9000'],
+    ['رد العميل بضاعة بقيمة 1,000.', 'م مردودات المبيعات 1000|د العملاء 1000'],
+    ['اشترى بضاعة بالآجل بمبلغ 14,000.', 'م المشتريات 14000|د الموردون 14000'],
+    ['رد للمورد بضاعة بقيمة 2,000.', 'م الموردون 2000|د مردودات المشتريات 2000'],
+    ['قبض من العميل باقي حسابه 8,000 نقداً.', 'م الصندوق 8000|د العملاء 8000'],
+  ]],
+  ['متوسط', 'الخصم ومصاريف النقل', [
+    ['سدد لمورد دَينه البالغ 5,000 نقداً، وحصل على خصم 100.', 'م الموردون 5000|د الصندوق 4900|د خصم مكتسب 100'],
+    ['حصّل من عميل دَينه البالغ 8,000 بشيك أودع في البنك، بعد منحه خصماً 160.', 'م البنك 7840|م خصم مسموح به 160|د العملاء 8000'],
+    ['اشترى بضاعة بالآجل بمبلغ 6,000، ودفع نقداً أجور نقلها 200.', 'م المشتريات 6000|م مصروف نقل المشتريات 200|د الموردون 6000|د الصندوق 200'],
+    ['دفع نقداً مصاريف نقل بضاعة مبيعة 150.', 'م مصروف نقل المبيعات 150|د الصندوق 150'],
+  ]],
+  ['متوسط', 'الأوراق التجارية', [
+    ['باع بضاعة بالآجل بمبلغ 12,000.', 'م العملاء 12000|د المبيعات 12000'],
+    ['قبل العميل كمبيالة بكامل المبلغ 12,000.', 'م أوراق القبض 12000|د العملاء 12000'],
+    ['حصّل قيمة الكمبيالة نقداً في موعدها.', 'م الصندوق 12000|د أوراق القبض 12000'],
+    ['اشترى بضاعة بالآجل بمبلغ 7,000.', 'م المشتريات 7000|د الموردون 7000'],
+    ['حرر للمورد كمبيالة بكامل المبلغ 7,000.', 'م الموردون 7000|د أوراق الدفع 7000'],
+    ['سدد قيمة الكمبيالة بشيك في موعدها.', 'م أوراق الدفع 7000|د البنك 7000'],
+  ]],
+  ['متوسط', 'بيع الأصول بربح وخسارة', [
+    ['اشترى أرضاً بشيك 60,000.', 'م الأراضي 60000|د البنك 60000'],
+    ['باع سيارة تكلفتها 20,000 نقداً بمبلغ 23,000 (بلا إهلاك).', 'م الصندوق 23000|د السيارات 20000|د أرباح بيع أصول 3000'],
+    ['باع آلة تكلفتها 9,000 بشيك 7,500 أودع في البنك (بلا إهلاك).', 'م البنك 7500|م خسائر بيع أصول 1500|د الآلات 9000'],
+    ['سحب المالك بضاعة لاستعماله الشخصي تكلفتها 500.', 'م المسحوبات 500|د المشتريات 500'],
+  ]],
+  ['متوسط', 'منشأة تجارية شاملة', [
+    ['بدأ النشاط بمبلغ 40,000 نقداً وبضاعة بقيمة 30,000.', 'م الصندوق 40000|م البضاعة 30000|د رأس المال 70000'],
+    ['اشترى أثاثاً بمبلغ 9,000، دفع 3,000 نقداً والباقي بالآجل.', 'م الأثاث 9000|د الصندوق 3000|د الدائنون 6000'],
+    ['باع بضاعة بمبلغ 11,000، نصفها نقداً ونصفها بالآجل.', 'م الصندوق 5500|م العملاء 5500|د المبيعات 11000'],
+    ['دفع نقداً الرواتب 2,000 وفاتورة الكهرباء 300.', 'م الرواتب 2000|م مصروف الكهرباء 300|د الصندوق 2300'],
+  ]],
+  ['متوسط', 'عمليات البنك', [
+    ['سحب من البنك 4,000 وأودعها في الصندوق.', 'م الصندوق 4000|د البنك 4000'],
+    ['أودع من الصندوق في البنك 2,500.', 'م البنك 2500|د الصندوق 2500'],
+    ['خصم البنك عمولة 50 من الحساب.', 'م مصروف عمولات بنكية 50|د البنك 50'],
+    ['أضاف البنك فائدة دائنة لحساب المنشأة 120.', 'م البنك 120|د إيراد الفوائد 120'],
+    ['أودع شيكاً من عميل بقيمة 3,000.', 'م البنك 3000|د العملاء 3000'],
+  ]],
+  ['متقدم', 'المصروفات والإيرادات المستحقة', [
+    ['إيجار الشهر 1,200 استحق ولم يدفع.', 'م مصروف الإيجار 1200|د إيجار مستحق 1200'],
+    ['رواتب الشهر 2,500 استحقت ولم تدفع.', 'م الرواتب 2500|د رواتب مستحقة 2500'],
+    ['فوائد استحقت للمنشأة ولم تقبض 400.', 'م إيراد مستحق 400|د إيراد الفوائد 400'],
+    ['سدد الرواتب المستحقة نقداً 2,500.', 'م رواتب مستحقة 2500|د الصندوق 2500'],
+  ]],
+  ['متقدم', 'المدفوع والمقبوض مقدماً', [
+    ['دفع نقداً تأمين سنة مقدماً 2,400، ويُسجل أصلاً.', 'م تأمين مدفوع مقدماً 2400|د الصندوق 2400'],
+    ['انتهى من التأمين ما يخص شهراً واحداً 200.', 'م مصروف التأمين 200|د تأمين مدفوع مقدماً 200'],
+    ['قبض نقداً إيجار سنة مقدماً 6,000، ويُسجل التزاماً.', 'م الصندوق 6000|د إيجار مقبوض مقدماً 6000'],
+    ['اكتسب من هذا الإيجار ما يخص شهراً واحداً 500.', 'م إيجار مقبوض مقدماً 500|د إيراد الإيجار 500'],
+  ]],
+  ['متقدم', 'الإهلاك وبيع الأصل المهلك', [
+    ['اشترى آلة بشيك 50,000.', 'م الآلات 50000|د البنك 50000'],
+    ['سجل إهلاك الآلة عن السنة 5,000.', 'م مصروف الإهلاك 5000|د مجمع إهلاك الآلات 5000'],
+    ['سجل إهلاك الأثاث عن السنة 800.', 'م مصروف الإهلاك 800|د مجمع إهلاك الأثاث 800'],
+    ['باع نقداً بمبلغ 7,000 آلة تكلفتها 10,000 ومجمع إهلاكها 4,000.', 'م الصندوق 7000|م مجمع إهلاك الآلات 4000|د الآلات 10000|د أرباح بيع أصول 1000'],
+  ]],
+  ['متقدم', 'الديون المشكوك فيها واللوازم', [
+    ['كوّن مخصصاً للديون المشكوك فيها 900.', 'م مصروف ديون مشكوك فيها 900|د مخصص ديون مشكوك فيها 900'],
+    ['أعدم دَيناً على عميل 600 من المخصص.', 'م مخصص ديون مشكوك فيها 600|د العملاء 600'],
+    ['اشترى لوازم نقداً 1,000، وتُسجل أصلاً.', 'م اللوازم 1000|د الصندوق 1000'],
+    ['بلغ المستخدم من اللوازم خلال الفترة 700.', 'م مصروف اللوازم 700|د اللوازم 700'],
+  ]],
+  ['متقدم', 'تسويات آخر السنة', [
+    ['فاتورة كهرباء استحقت ولم تدفع 450.', 'م مصروف الكهرباء 450|د كهرباء مستحقة 450'],
+    ['إهلاك السيارات عن السنة 3,000.', 'م مصروف الإهلاك 3000|د مجمع إهلاك السيارات 3000'],
+    ['اكتسب 900 من عمولة قبضت سابقاً وسُجلت في حساب إيراد مقدم.', 'م إيراد مقدم 900|د إيراد العمولات 900'],
+    ['انتهى من التأمين المدفوع مقدماً 300.', 'م مصروف التأمين 300|د تأمين مدفوع مقدماً 300'],
+  ]],
+  ['متقدم', 'قيود الإقفال', [
+    ['أقفل المبيعات 30,000 في حساب ملخص الدخل.', 'م المبيعات 30000|د ملخص الدخل 30000'],
+    ['أقفل المشتريات 14,000 والرواتب 4,000 في حساب ملخص الدخل.', 'م ملخص الدخل 18000|د المشتريات 14000|د الرواتب 4000'],
+    ['نقل صافي الربح 12,000 إلى رأس المال.', 'م ملخص الدخل 12000|د رأس المال 12000'],
+    ['أقفل المسحوبات 2,000 في رأس المال.', 'م رأس المال 2000|د المسحوبات 2000'],
+  ]],
+];
+const EXERCISES = EX_DATA.map(([level, title, items], i) => {
+  const sol = items.map(x => x[1].split('|').join('\n')).join('\n\n');
+  return { id: 'e' + (i + 1), level, title, ops: items.map(x => x[0]), sol, model: parseJournal(sol).entries };
+});
+const EX_BY_ID = Object.fromEntries(EXERCISES.map(e => [e.id, e]));
+
+const SYNONYMS = { 'نقديه': 'صندوق', 'نقد': 'صندوق', 'خزينه': 'صندوق', 'مصرف': 'بنك', 'موردين': 'موردون', 'ذمم دائنه': 'دائنون', 'مدينون': 'عملاء', 'زبائن': 'عملاء', 'ذمم مدينه': 'عملاء', 'اجور': 'رواتب', 'رواتب واجور': 'رواتب', 'ارض': 'اراضي', 'سياره': 'سيارات', 'اله': 'الات', 'مسحوبات شخصيه': 'مسحوبات' };
+function canon(key) {
+  const k = key.replace(/^(مصروفات|مصروف|مصاريف)\s+/, '').split(' ').map(w => w === 'ايرادات' ? 'ايراد' : w).join(' ');
+  if (/^(قرض|قروض)/.test(k)) return 'قرض';
+  return SYNONYMS[k] || k;
+}
+function checkExercise(ex, journalText) {
+  const student = parseJournal(journalText || '').entries.map(e => ({ first: e.lines[0].line, lines: e.lines.map(l => ({ ...l, k: canon(l.key) })) }));
+  const model = ex.model.map(e => e.lines.map(l => ({ ...l, k: canon(l.key) })));
+  const sig = ls => ls.map(l => `${l.k}/${l.side}/${l.amount}`).sort().join('|');
+  const okOps = new Set(), usedS = new Set(), findings = [];
+  model.forEach((m, i) => {
+    const j = student.findIndex((s, n) => !usedS.has(n) && sig(s.lines) === sig(m));
+    if (j >= 0) { okOps.add(i); usedS.add(j); }
+  });
+  const pairs = [];
+  model.forEach((m, i) => { if (okOps.has(i)) return; student.forEach((s, n) => {
+    if (usedS.has(n)) return;
+    let score = 0;
+    for (const l of m) { if (s.lines.some(x => x.k === l.k)) score += 2; if (s.lines.some(x => x.amount === l.amount)) score += 1; }
+    if (score >= 2) pairs.push({ i, n, score });
+  }); });
+  pairs.sort((a, b) => b.score - a.score || a.i - b.i);
+  const matched = new Map();
+  for (const p of pairs) if (!matched.has(p.i) && !usedS.has(p.n)) { matched.set(p.i, p.n); usedS.add(p.n); }
+  const add = (title, body, line) => findings.push({ lv: 'err', title, body, box: 'journal', line });
+  for (const [i, n] of matched) {
+    const m = model[i], s = student[n], op = `العملية ${i + 1}`, mk = new Set(m.map(l => l.k)), sk = new Set(s.lines.map(l => l.k));
+    const extra = s.lines.filter(l => !mk.has(l.k)), missing = m.filter(l => !sk.has(l.k));
+    if (extra.length && missing.length) add(`${op}: حساب غير مناسب`, `«${extra[0].account}» لا يناسب هذه العملية. فكّر في الحساب الذي تأثر فعلاً.`, extra[0].line);
+    else if (extra.length) add(`${op}: حساب زائد`, `«${extra[0].account}» ليس طرفاً في هذه العملية.`, extra[0].line);
+    else if (missing.length) add(`${op}: ينقصها طرف`, 'القيد ناقص حساباً. راجع كل ما تأثر بهذه العملية.', s.first);
+    else {
+      const wrongSide = s.lines.filter(l => m.some(x => x.k === l.k && x.side !== l.side));
+      const allFlip = wrongSide.length === s.lines.length;
+      if (wrongSide.length) add(allFlip ? `${op}: الجانبان معكوسان` : `${op}: «${wrongSide[0].account}» في الجانب الخطأ`, allFlip ? 'الحسابات صحيحة، لكن ما يجب أن يكون مديناً كُتب دائناً والعكس.' : 'الحساب صحيح، لكن راجع هل زاد أم نقص في هذه العملية.', wrongSide[0].line);
+      else {
+        const wrongAmt = s.lines.find(l => !m.some(x => x.k === l.k && x.amount === l.amount)) || s.lines[0];
+        add(`${op}: مبلغ «${wrongAmt.account}» غير صحيح`, `المكتوب ${money(wrongAmt.amount)}. راجع المبلغ في نص العملية.`, wrongAmt.line);
+      }
+    }
+  }
+  student.forEach((s, n) => { if (!usedS.has(n)) add('قيد لا يطابق أي عملية', `القيد الذي يبدأ بـ«${s.lines[0].account}» لا يقابل عملية في التمرين.`, s.first); });
+  const open = model.map((_, i) => i).filter(i => !okOps.has(i) && !matched.has(i));
+  if (student.length && open.length) findings.push({ lv: 'check', title: open.length === 1 ? `لم تُقيَّد العملية ${open[0] + 1} بعد` : open.length === 2 ? 'لم تُقيَّد عمليتان بعد' : `لم تُقيَّد ${open.length} عمليات بعد`, body: 'العمليات: ' + open.map(i => i + 1).join('، ') });
+  return { okOps, total: model.length, okCount: okOps.size, solved: okOps.size === model.length && student.length === model.length, findings };
+}
 //LOGIC-END
 
 const SAMPLE = {
@@ -437,7 +659,7 @@ const LV = { err: 'خطأ', likely: 'مرجّح', check: 'راجعه' };
 const LOCAL_KEY = 'mizan-problems-v1';
 
 const problems = new Map();
-let current, coll = null, saveTimer = null, chain = Promise.resolve(), touched = false, delArmed = null;
+let current, coll = null, saveTimer = null, chain = Promise.resolve(), touched = false, showSol = false;
 const newId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const blank = () => ({ id: newId(), title: 'مسألة ' + (problems.size + 1), journal: '', trial: '', classes: {}, updatedAt: 0 });
 const setStatus = t => { $('status').textContent = t; };
@@ -446,7 +668,7 @@ function readLocal() { try { return JSON.parse(localStorage.getItem(LOCAL_KEY) |
 function writeLocal() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify([...problems.values()])); } catch (e) {} }
 
 function persist(p) {
-  const body = { title: p.title, journal: p.journal, trial: p.trial, classes: p.classes, updatedAt: p.updatedAt };
+  const body = { title: p.title, journal: p.journal, trial: p.trial, classes: p.classes, updatedAt: p.updatedAt, exId: p.exId || null };
   chain = chain.then(async () => {
     if (!coll) { writeLocal(); setStatus('محفوظة على هذا الجهاز'); return; }
     try { await coll.doc(p.id).set(body); setStatus('محفوظة'); }
@@ -471,20 +693,59 @@ function renderPicker() {
   $('picker').value = current.id;
 }
 function openProblem(p) {
-  flush(); current = p; disarm();
+  flush(); current = p; showSol = false;
   $('title').value = p.title; $('journal').value = p.journal; $('trial').value = p.trial;
   renderPicker(); render();
 }
-function disarm() { clearTimeout(delArmed); delArmed = null; $('del').textContent = 'حذف'; $('del').classList.remove('danger'); }
+function twoStep(id, label, action, needed) {
+  const b = $(id), base = b.textContent; let t = null;
+  const reset = () => { clearTimeout(t); t = null; b.textContent = base; b.classList.remove('danger'); };
+  b.addEventListener('click', () => {
+    if (needed && !needed()) { action(); return; }
+    if (!t) { b.textContent = label; b.classList.add('danger'); t = setTimeout(reset, 4000); return; }
+    reset(); action();
+  });
+}
+function openExercise(ex) {
+  const saved = [...problems.values()].find(p => p.exId === ex.id);
+  openProblem(saved || { id: newId(), title: ex.title, journal: '', trial: '', classes: {}, updatedAt: 0, exId: ex.id });
+}
+function setAnswer(journal, trial) {
+  current.journal = journal; current.trial = trial;
+  $('journal').value = journal; $('trial').value = trial;
+  edited(); render();
+}
+function renderEx(ex, chk) {
+  const solved = new Set([...problems.values()].filter(p => p.exId && EX_BY_ID[p.exId] && checkExercise(EX_BY_ID[p.exId], p.journal).solved).map(p => p.exId));
+  $('exProgress').textContent = `حُلّ ${solved.size} من ${EXERCISES.length}`;
+  $('exPick').innerHTML = '<option value="">اختر تمريناً</option>' + LEVELS.map(l => `<optgroup label="${l}">${EXERCISES.filter(e => e.level === l).map(e => `<option value="${e.id}">${solved.has(e.id) ? '✓ ' : ''}${esc(e.title)}</option>`).join('')}</optgroup>`).join('');
+  $('exPick').value = ex ? ex.id : '';
+  $('exBody').hidden = !ex;
+  if (!ex) return;
+  $('exOps').innerHTML = ex.ops.map((o, i) => `<li class="${chk.okOps.has(i) ? 'done' : ''}">${esc(o)}</li>`).join('');
+  const names = [...new Set(ex.model.flatMap(e => e.lines.map(l => l.account)))].sort((a, b) => a.localeCompare(b, 'ar'));
+  $('exAcc').innerHTML = names.map(n => `<li>${esc(n)}</li>`).join('');
+  $('showSol').textContent = showSol ? 'إخفاء الحل' : 'عرض الحل';
+  $('solBox').hidden = !showSol;
+  $('exSol').textContent = ex.sol;
+}
 
 let last;
 function render() {
   const r = last = analyze(current.journal, current.trial, current.classes);
+  const ex = current.exId ? EX_BY_ID[current.exId] : null;
+  const chk = ex ? checkExercise(ex, current.journal) : null;
+  if (ex) {
+    const rank = { err: 0, likely: 1, check: 2 };
+    r.findings = chk.findings.concat(r.findings.filter(f => !f.abn)).sort((a, b) => rank[a.lv] - rank[b.lv]);
+  }
   const empty = !r.hasJ && !r.hasT && !r.findings.length;
   const errs = r.findings.filter(f => f.lv === 'err').length, others = r.findings.length - errs;
   const v = $('verdict');
   let head, cls;
-  if (empty) { cls = ''; head = 'اكتب أول قيد لتظهر النتيجة'; }
+  if (empty) { cls = ''; head = ex ? 'اكتب قيد العملية الأولى' : 'اكتب أول قيد لتظهر النتيجة'; }
+  else if (ex && chk.solved && !errs && !r.S) { cls = 'ok'; head = 'إجابة صحيحة، وكل العمليات مقيدة'; }
+  else if (ex) { cls = errs ? 'bad' : 'warn'; head = `${chk.okCount} من ${chk.total} عمليات صحيحة`; }
   else if (r.S) { cls = 'bad'; head = `الميزان لا يتوازن، والفرق ${money(Math.abs(r.S))}`; }
   else if (errs) { cls = 'bad'; head = `الميزان متوازن لكن فيه ${errs === 1 ? 'خطأ واحد' : errs === 2 ? 'خطأين' : errs + ' أخطاء'}`; }
   else if (others) { cls = 'warn'; head = 'الميزان متوازن، وبقيت نقاط للمراجعة'; }
@@ -508,6 +769,7 @@ function render() {
   const fig = (l, c) => `<div class="fig"><span>${l}</span><b>${c < 0 ? '(' + money(-c) + ')' : money(c)}</b></div>`;
   $('eq').innerHTML = !r.rows.length ? '<p class="none">الأصول = الخصوم + حقوق الملكية + صافي الربح</p>' :
     fig('الأصول', r.eq.A) + '<i>=</i>' + fig('الخصوم', r.eq.L) + '<i>+</i>' + fig('حقوق الملكية', r.eq.E) + '<i>+</i>' + fig('صافي الربح', r.eq.NI) + (r.eq.U ? fig('غير مصنف', r.eq.U) : '');
+  renderEx(ex, chk);
 }
 
 function jump(box, line) {
@@ -529,8 +791,18 @@ $('title').addEventListener('input', e => { current.title = e.target.value; edit
 $('picker').addEventListener('change', e => { const p = problems.get(e.target.value); if (p) openProblem(p); });
 $('new').addEventListener('click', () => { openProblem(blank()); $('journal').focus(); });
 $('sample').addEventListener('click', () => openProblem({ ...blank(), ...SAMPLE, classes: {} }));
-$('del').addEventListener('click', () => {
-  if (!delArmed) { $('del').textContent = 'تأكيد الحذف'; $('del').classList.add('danger'); delArmed = setTimeout(disarm, 4000); return; }
+$('exPick').addEventListener('change', e => { const x = EX_BY_ID[e.target.value]; if (x) openExercise(x); });
+const stepEx = d => {
+  const i = EXERCISES.findIndex(e => e.id === current.exId);
+  const n = i < 0 ? 0 : (i + d + EXERCISES.length) % EXERCISES.length;
+  openExercise(EXERCISES[n]);
+};
+$('exPrev').addEventListener('click', () => stepEx(-1));
+$('exNext').addEventListener('click', () => stepEx(1));
+$('showSol').addEventListener('click', () => { showSol = !showSol; render(); });
+twoStep('clear', 'تأكيد التفريغ', () => { setAnswer('', ''); $('journal').focus(); setStatus('فُرّغت الخانات'); }, () => current.journal || current.trial);
+twoStep('fillSol', 'تأكيد الاستبدال', () => { const x = EX_BY_ID[current.exId]; if (x) setAnswer(x.sol, current.trial); }, () => current.journal);
+twoStep('del', 'تأكيد الحذف', () => {
   clearTimeout(saveTimer); saveTimer = null;
   const id = current.id, had = problems.delete(id);
   if (had) {
