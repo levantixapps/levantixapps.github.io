@@ -1,5 +1,5 @@
 // Increase the version number with every update to the app files.
-const CACHE = 'mizan-v1';
+const CACHE = 'mizan-v2';
 const FONTS = 'mizan-fonts-v1';
 const FILES = ['./', 'index.html', 'pwa.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 

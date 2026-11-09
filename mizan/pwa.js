@@ -42,6 +42,13 @@
       return;
     }
     note.textContent = help();
+    if (/Android/.test(ua)) {
+      const apk = document.createElement('a');
+      apk.href = 'mizan.apk';
+      apk.download = 'mizan.apk';
+      apk.textContent = 'أو حمّل ملف APK';
+      note.append(' ', apk);
+    }
     note.hidden = false;
   });
 })();

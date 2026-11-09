@@ -5,4 +5,11 @@
     "package_name": "io.github.levantixapps.yawmi",
     "sha256_cert_fingerprints": ["B0:BD:18:D4:0E:31:4F:16:62:62:44:E9:8D:98:C2:58:24:73:35:84:55:F4:B2:4D:99:C1:D8:66:23:65:6C:E8"]
   }
+}, {
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.levantixapps.mizan",
+    "sha256_cert_fingerprints": ["6C:A3:61:F5:45:CD:DE:D5:EE:14:08:96:18:D9:F8:C4:A2:09:B3:95:AB:40:A5:E8:78:D1:C8:37:35:8D:BD:71"]
+  }
 }]
