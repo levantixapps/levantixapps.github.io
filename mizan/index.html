@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>كشّاف الميزان</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;700&display=swap">
+<style>
+/* Layout: ledger sheets on the input side, a diagnosis column on the other; the verdict comes first. */
+:root {
+  --paper: #E9F1EC; --sheet: #FBFDFC; --ink: #16302A; --muted: #55706A; --rule: #C6D9CF; --line: #DCE9E2;
+  --margin: #E2A9A4; --accent: #0E6A5B; --on-accent: #FFFFFF;
+  --err: #B3261E; --err-bg: #FBE9E7; --warn: #8F5600; --warn-bg: #FBF0DC; --ok: #17704A; --ok-bg: #DFF3E8;
+  --display: "Reem Kufi", "IBM Plex Sans Arabic", Tahoma, sans-serif;
+  --body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0E1A17; --sheet: #15241F; --ink: #DDEBE4; --muted: #92ACA2; --rule: #2E443B; --line: #223630;
+  --margin: #7A4442; --accent: #5FC9B2; --on-accent: #0B1B17;
+  --err: #FF9A90; --err-bg: #3A1F1D; --warn: #F0B860; --warn-bg: #352A14; --ok: #74D6A0; --ok-bg: #16362A;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --paper: #0E1A17; --sheet: #15241F; --ink: #DDEBE4; --muted: #92ACA2; --rule: #2E443B; --line: #223630;
+  --margin: #7A4442; --accent: #5FC9B2; --on-accent: #0B1B17;
+  --err: #FF9A90; --err-bg: #3A1F1D; --warn: #F0B860; --warn-bg: #352A14; --ok: #74D6A0; --ok-bg: #16362A;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.65; }
+.app { max-width: 1240px; margin-inline: auto; padding-block: 18px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 16px; font-variant-numeric: tabular-nums; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+h1, h2 { margin: 0; text-wrap: balance; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.brand { font-family: var(--display); font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 320px; min-width: 0; }
+.bar select, .bar input { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 10px; min-width: 0; }
+#picker { flex: 1 1 130px; max-width: 240px; }
+#title { flex: 1 1 150px; }
+.btn { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.main { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.danger { color: var(--err); border-color: var(--err); }
+#status { font-size: 13px; color: var(--muted); }
+
+.work { display: grid; gap: 16px; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+@media (max-width: 900px) { .work { grid-template-columns: minmax(0, 1fr); } }
+.col { display: grid; gap: 16px; min-width: 0; }
+
+.sheet { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 14px; display: grid; gap: 8px; min-width: 0; }
+.sheet h2 { font-family: var(--display); font-size: 18px; font-weight: 500; }
+.sub { margin: 0; font-size: 13px; color: var(--muted); }
+.sub b { font-weight: 600; color: var(--ink); }
+textarea { width: 100%; display: block; resize: vertical; border: 1px solid var(--rule); border-radius: 2px; padding: 0 22px 0 8px; font-size: 16px; line-height: 30px;
+  background-color: var(--sheet);
+  background-image: linear-gradient(to left, transparent 13px, var(--margin) 13px, var(--margin) 14px, transparent 14px), repeating-linear-gradient(to bottom, transparent 0, transparent 29px, var(--line) 29px, var(--line) 30px);
+  background-attachment: local; }
+#journal { height: 330px; }
+#trial { height: 240px; }
+
+.verdict { border-radius: 4px; padding: 14px 16px; display: grid; gap: 10px; border: 1px solid var(--rule); background: var(--sheet); }
+.verdict.bad { background: var(--err-bg); border-color: var(--err); }
+.verdict.warn { background: var(--warn-bg); border-color: var(--warn); }
+.verdict.ok { background: var(--ok-bg); border-color: var(--ok); }
+.verdict h2 { font-family: var(--display); font-size: 23px; font-weight: 700; line-height: 1.35; }
+.verdict.bad h2 { color: var(--err); } .verdict.warn h2 { color: var(--warn); } .verdict.ok h2 { color: var(--ok); }
+.figs { display: flex; flex-wrap: wrap; gap: 6px 30px; }
+.fig { display: grid; }
+.fig span { font-size: 13px; color: var(--muted); }
+.fig b { font-size: 20px; font-weight: 600; }
+
+.finds { list-style: none; margin: 0; padding: 0; display: grid; }
+.find { border-top: 1px solid var(--line); }
+.find:first-child { border-top: 0; }
+.find-in { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 9px 2px; width: 100%; text-align: right; background: none; border: 0; }
+button.find-in { cursor: pointer; }
+button.find-in:hover { background: var(--paper); }
+.find-t { font-weight: 600; }
+.find-b { grid-column: 2; font-size: 14px; color: var(--muted); }
+.find-go { color: var(--accent); white-space: nowrap; }
+.chip { font-size: 12px; font-weight: 600; border-radius: 3px; padding: 1px 7px; white-space: nowrap; align-self: start; margin-top: 2px; }
+.chip.err { color: var(--err); background: var(--err-bg); }
+.chip.likely { color: var(--warn); background: var(--warn-bg); }
+.chip.check { color: var(--muted); background: var(--paper); }
+.chip.good { color: var(--ok); background: var(--ok-bg); }
+.none { margin: 0; color: var(--muted); }
+
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { font-size: 13px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--rule); }
+td.n, th.n { text-align: left; }
+tfoot td { font-weight: 600; border-top: 2px solid var(--ink); border-bottom: 0; }
+tr.bad td.nm { color: var(--err); font-weight: 600; }
+td select { background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 1px 3px; font-size: 13px; }
+td select.unk { border-color: var(--warn); color: var(--warn); }
+
+.eq { display: flex; flex-wrap: wrap; align-items: end; gap: 6px 12px; }
+.eq i { font-style: normal; font-size: 20px; color: var(--muted); line-height: 1.7; }
+.eq .fig b { font-size: 18px; }
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+
+<div class="app" dir="rtl" lang="ar">
+  <header class="top">
+    <h1 class="brand">كشّاف الميزان</h1>
+    <div class="bar">
+      <select id="picker" aria-label="المسائل المحفوظة"></select>
+      <input id="title" aria-label="اسم المسألة" placeholder="اسم المسألة" maxlength="80">
+      <button class="btn main" id="new" type="button">مسألة جديدة</button>
+      <button class="btn" id="sample" type="button">مثال</button>
+      <button class="btn" id="del" type="button">حذف</button>
+      <span id="status" role="status"></span>
+    </div>
+  </header>
+
+  <main class="work">
+    <section class="col" aria-label="إدخال المسألة">
+      <div class="sheet">
+        <h2><label for="journal">القيود</label></h2>
+        <textarea id="journal" spellcheck="false" placeholder="م الصندوق 5000&#10;د رأس المال 5000"></textarea>
+        <p class="sub"><b>م</b> للمدين و<b>د</b> للدائن، ثم الحساب والمبلغ. سطر فارغ بين كل قيد وآخر. وتُقبل صيغة «من حـ/ … إلى حـ/ …» والأرقام العربية.</p>
+      </div>
+      <div class="sheet">
+        <h2><label for="trial">الميزان الذي حللته</label></h2>
+        <textarea id="trial" spellcheck="false" placeholder="الصندوق 5000 م&#10;رأس المال 5000 د"></textarea>
+        <p class="sub">ميزان مراجعة أو ميزانية، ويمكن لصقه من Excel بعمودي مدين ودائن. عند وجود القيود معه يُطابَق كل حساب على حدة.</p>
+      </div>
+    </section>
+
+    <section class="col" aria-label="النتيجة">
+      <div class="verdict" id="verdict"></div>
+      <div class="sheet"><h2>أين الخطأ</h2><div id="findings"></div></div>
+      <div class="sheet"><h2 id="tableTitle">ميزان المراجعة</h2><div class="scroll" id="table"></div></div>
+      <div class="sheet"><h2>المعادلة المحاسبية</h2><div class="eq" id="eq"></div></div>
+    </section>
+  </main>
+</div>
+
+<script>
+//LOGIC-START
+const NUM = /^\d[\d,]*(\.\d+)?$/, DASH = /^[-–—_]+$/;
+const DEBIT_WORDS = new Set(['م', 'م.', 'مدين', 'مدينة', 'dr', 'Dr', 'DR']);
+const CREDIT_WORDS = new Set(['د', 'د.', 'دائن', 'دائنة', 'cr', 'Cr', 'CR']);
+const CURRENCY = new Set(['ل.س', 'ل.س.', 'ليرة', 'ريال', 'ر.س', 'دينار', 'دولار', 'درهم', 'جنيه', 'ج.م', '$']);
+const CLASS_LABEL = { A: 'أصل', L: 'خصم', E: 'حقوق ملكية', R: 'إيراد', X: 'مصروف', U: 'غير معروف' };
+const NORMAL_OF = { A: 'D', X: 'D', L: 'C', E: 'C', R: 'C' };
+const SIDE_LABEL = { D: 'مدين', C: 'دائن' };
+
+const RULES = [
+  ['مجمع', 'A', 'C'], ['مخصص', 'A', 'C'], ['مسحوبات', 'E', 'D'],
+  ['مردودات مبيعات', 'R', 'D'], ['مسموحات مبيعات', 'R', 'D'], ['خصم مسموح', 'X', 'D'],
+  ['مردودات مشتريات', 'X', 'C'], ['مسموحات مشتريات', 'X', 'C'], ['خصم مكتسب', 'R', 'C'],
+  ['مدفوع مقدم', 'A'], ['مدفوعه مقدم', 'A'], ['مصروف مقدم', 'A'], ['مصروفات مقدم', 'A'], ['مصاريف مقدم', 'A'],
+  ['ايراد مستحق', 'A'], ['ايرادات مستحق', 'A'], ['مقبوض مقدم', 'L'], ['مقبوضه مقدم', 'L'], ['ايراد مقدم', 'L'], ['ايرادات مقدم', 'L'], ['غير مكتسب', 'L'],
+  ['مستحق', 'L'], ['قروض ممنوحه', 'A'], ['قرض ممنوح', 'A'], ['فوائد دائنه', 'R'], ['فوائد مدينه', 'X'],
+  ['ارباح محتجزه', 'E'], ['ارباح مبقاه', 'E'],
+  ['ايراد', 'R'], ['مكتسب', 'R'], ['مقبوض', 'R'], ['ارباح', 'R'], ['وسائل نقل', 'A'],
+  ['مصروف', 'X'], ['مصاريف', 'X'], ['مشتريات', 'X'], ['رواتب', 'X'], ['اجور', 'X'], ['ايجار', 'X'], ['كهرباء', 'X'], ['مياه', 'X'], ['ماء', 'X'], ['هاتف', 'X'], ['فوائد', 'X'], ['تامين', 'X'], ['نقل', 'X'], ['صيانه', 'X'], ['دعايه', 'X'], ['اعلان', 'X'], ['اهلاك', 'X'], ['استهلاك', 'X'], ['ضرائب', 'X'], ['ضريبه', 'X'], ['قرطاسيه', 'X'], ['عموله', 'X'], ['تكلفه', 'X'], ['خسائر', 'X'], ['خساره', 'X'],
+  ['مبيعات', 'R'],
+  ['اوراق دفع', 'L'], ['سندات دفع', 'L'], ['دائن', 'L'], ['مورد', 'L'], ['قرض', 'L'], ['قروض', 'L'], ['رهن', 'L'],
+  ['اوراق قبض', 'A'], ['سندات قبض', 'A'], ['شيكات', 'A'], ['سندات', 'L'],
+  ['صندوق', 'A'], ['نقد', 'A'], ['بنك', 'A'], ['مصرف', 'A'], ['مدين', 'A'], ['عملاء', 'A'], ['عميل', 'A'], ['بضاعه', 'A'], ['مخزون', 'A'],
+  ['الات', 'A'], ['معدات', 'A'], ['اثاث', 'A'], ['مباني', 'A'], ['مبني', 'A'], ['اراضي', 'A'], ['ارض', 'A'], ['سيارات', 'A'], ['سياره', 'A'], ['اجهزه', 'A'], ['تجهيزات', 'A'], ['شهره', 'A'], ['استثمار', 'A'], ['لوازم', 'A'],
+  ['راس مال', 'E'], ['راسمال', 'E'], ['احتياطي', 'E'], ['جاري شريك', 'E'],
+];
+
+function normDigits(s) {
+  return s.replace(/[٠-٩]/g, d => d.charCodeAt(0) - 0x660).replace(/[۰-۹]/g, d => d.charCodeAt(0) - 0x6F0)
+    .replace(/٬/g, ',').replace(/٫/g, '.').replace(/(\d)،(\d)/g, '$1,$2');
+}
+function normName(s) {
+  return s.replace(/[ً-ٰٟـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/)
+    .map(w => w.length > 4 && w.startsWith('ال') ? w.slice(2) : w).join(' ');
+}
+function classify(key, overrides) {
+  const rule = RULES.find(r => key.includes(r[0]));
+  const base = rule ? { cls: rule[1], normal: rule[2] || NORMAL_OF[rule[1]] } : { cls: 'U', normal: null };
+  const o = overrides && overrides[key];
+  if (o && o !== base.cls) return o === 'U' ? { cls: 'U', normal: null } : { cls: o, normal: NORMAL_OF[o] };
+  return base;
+}
+function money(c) { return (c / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+
+function parseLine(raw, line) {
+  let s = normDigits(raw.replace(/\r/g, ''));
+  if (!s.trim() || /^\s*(#|\/\/)/.test(s)) return null;
+  s = s.split('\t').map((c, i, a) => a.length > 1 && !c.trim() ? '-' : c).join(' ');
+  s = s.replace(/(\d)(\p{L})/gu, '$1 $2').replace(/(\p{L})(\d)/gu, '$1 $2');
+  let seq = []; const name = [];
+  for (const t of s.trim().split(/\s+/)) {
+    const c = t.replace(/^[(:]+|[):؛,،]+$/g, '');
+    if (NUM.test(c)) seq.push(Math.round(parseFloat(c.replace(/,/g, '')) * 100));
+    else if (DASH.test(c)) { if (name.length || seq.length) seq.push(null); }
+    else if (CURRENCY.has(c) && seq.length) continue;
+    else { name.push(t); seq = seq.filter(x => x !== null); }
+  }
+  let text = name.join(' '), side = null;
+  const m = text.match(/^(من|إلى|الى|إلي|الي)(?=\s|حـ?\s*\/)\s*/);
+  if (m) { side = m[1] === 'من' ? 'D' : 'C'; text = text.slice(m[0].length); }
+  const words = text.split(' ').filter(Boolean);
+  if (!side && words.length > 1) {
+    if (DEBIT_WORDS.has(words[0])) { side = 'D'; words.shift(); }
+    else if (CREDIT_WORDS.has(words[0])) { side = 'C'; words.shift(); }
+    else if (DEBIT_WORDS.has(words[words.length - 1])) { side = 'D'; words.pop(); }
+    else if (CREDIT_WORDS.has(words[words.length - 1])) { side = 'C'; words.pop(); }
+  }
+  const account = words.join(' ').replace(/^(?:ال)?حـ?\s*\/\s*/, '').replace(/^حساب\s+/, '').replace(/^\/\s*/, '').replace(/[:؛،()]+/g, ' ').trim();
+  const key = normName(account);
+  const nums = seq.filter(x => x !== null);
+  if (/^(مجموع|اجمالي)/.test(key)) return null;
+  if (/^مذكور/.test(key) && !nums.length) return null;
+  const fail = error => ({ line, raw: raw.trim(), error });
+  if (!nums.length) return fail('لا يوجد مبلغ في هذا السطر.');
+  if (nums.length > 2) return fail('في السطر أكثر من مبلغين.');
+  let amount = nums[0], posSide = null;
+  if (nums.length === 2) {
+    if (nums[0] > 0 && nums[1] > 0) return fail('في السطر مبلغ مدين ومبلغ دائن معاً.');
+    if (nums[0] === 0 && nums[1] === 0) return null;
+    amount = nums[0] || nums[1]; posSide = nums[0] ? 'D' : 'C';
+  } else if (seq.length === 2) posSide = seq[0] === null ? 'C' : 'D';
+  if (amount === 0) return fail('المبلغ يساوي صفراً.');
+  if (!account) return fail('اسم الحساب ناقص.');
+  return { line, side: side || posSide, account, key, amount };
+}
+
+function parseJournal(text) {
+  const rows = text.split('\n'), isSep = l => !l.trim() || /^\s*-{3,}\s*$/.test(l);
+  let first = rows.findIndex(l => !isSep(l)), last = rows.length - 1;
+  while (last >= 0 && isSep(rows[last])) last--;
+  const hasSep = first >= 0 && rows.slice(first, last + 1).some(isSep);
+  const entries = [], errors = []; let cur = null;
+  const close = () => { if (cur) entries.push(cur); cur = null; };
+  rows.forEach((l, i) => {
+    if (isSep(l)) { close(); return; }
+    const p = parseLine(l, i + 1);
+    if (!p) return;
+    if (p.error) { errors.push(p); return; }
+    if (!p.side) { errors.push({ line: p.line, raw: l.trim(), error: 'الجانب غير محدد. ابدأ السطر بحرف م أو د.' }); return; }
+    if (!hasSep && cur && p.side === 'D' && cur.lines.some(x => x.side === 'C')) close();
+    if (!cur) cur = { lines: [] };
+    cur.lines.push(p);
+  });
+  close();
+  entries.forEach((e, i) => {
+    e.no = i + 1;
+    e.lines.forEach(x => { x.entry = e.no; });
+    e.D = e.lines.filter(x => x.side === 'D').reduce((a, x) => a + x.amount, 0);
+    e.C = e.lines.filter(x => x.side === 'C').reduce((a, x) => a + x.amount, 0);
+  });
+  return { entries, errors };
+}
+
+function isSwap(a, b) {
+  const x = String(a), y = String(b);
+  if (a === b || x.length !== y.length) return false;
+  const d = [];
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) d.push(i);
+  return d.length === 2 && x[d[0]] === y[d[1]] && x[d[1]] === y[d[0]];
+}
+function isSlide(a, b) { return a !== b && (a === b * 10 || a === b * 100 || b === a * 10 || b === a * 100); }
+
+function lev(a, b) {
+  let row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j++) next[j] = Math.min(row[j] + 1, next[j - 1] + 1, row[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    row = next;
+  }
+  return row[b.length];
+}
+
+/* S = total debit minus total credit. rows: {account, side, amount, line, abnormal} */
+function diffHints(S, rows) {
+  if (!S) return [];
+  const big = S > 0 ? 'D' : 'C', abs = Math.abs(S), out = [];
+  for (const r of rows) {
+    const name = `«${r.account}»`;
+    if (r.side === big && r.amount * 2 === abs) out.push({ lv: r.abnormal ? 'err' : 'likely', rank: r.abnormal ? 0 : 1, line: r.line,
+      title: `${name} في الجانب الخطأ على الأرجح`, body: `نقل ${money(r.amount)} من ${SIDE_LABEL[r.side]} إلى ${SIDE_LABEL[r.side === 'D' ? 'C' : 'D']} يلغي الفرق.` });
+    if (r.side === big && r.amount === abs) out.push({ lv: 'likely', rank: 2, line: r.line,
+      title: `${name} قد يكون بلا طرف مقابل`, body: `الفرق يساوي مبلغ هذا الحساب تماماً (${money(abs)}). راجع إن كان مسجلاً من جانب واحد أو مكرراً.` });
+    const t = r.side === 'D' ? r.amount - S : r.amount + S;
+    if (t > 0 && isSwap(r.amount, t)) out.push({ lv: 'likely', rank: 1, line: r.line,
+      title: `${name}: أرقام مقلوبة`, body: `المكتوب ${money(r.amount)}، ولو كان ${money(t)} يزول الفرق.` });
+    if (t > 0 && isSlide(r.amount, t)) out.push({ lv: 'likely', rank: 1, line: r.line,
+      title: `${name}: خطأ في المنزلة`, body: `المكتوب ${money(r.amount)}، ولو كان ${money(t)} يزول الفرق.` });
+  }
+  return out.sort((a, b) => a.rank - b.rank);
+}
+
+function analyze(journalText, trialText, overrides) {
+  const findings = [], add = (lv, title, body, box, line) => findings.push({ lv, title, body, box, line });
+  const { entries, errors } = parseJournal(journalText || '');
+  errors.forEach(e => add('err', `سطر لم يُفهم: ${e.raw}`, e.error, 'journal', e.line));
+
+  const correct = new Map();
+  let unbalancedEntries = 0;
+  for (const e of entries) {
+    const first = e.lines[0].line, S = e.D - e.C;
+    if (!e.D || !e.C) { unbalancedEntries++; add('err', `القيد ${e.no} من جانب واحد`, `فيه ${e.D ? 'مدين' : 'دائن'} فقط بمبلغ ${money(e.D || e.C)}، وينقصه الطرف الآخر.`, 'journal', first); }
+    else if (S) {
+      unbalancedEntries++;
+      const hint = diffHints(S, e.lines)[0];
+      add('err', `القيد ${e.no} غير متوازن`, `مدين ${money(e.D)} ودائن ${money(e.C)}، والفرق ${money(Math.abs(S))}.` + (hint ? ` ${hint.title}: ${hint.body}` : ''), 'journal', hint ? hint.line : first);
+    }
+    const dk = new Set(e.lines.filter(x => x.side === 'D').map(x => x.key));
+    const twice = e.lines.find(x => x.side === 'C' && dk.has(x.key));
+    if (twice) add('check', `القيد ${e.no}: «${twice.account}» في الجانبين`, 'الحساب نفسه مدين ودائن في قيد واحد. راجع اسم أحد الطرفين.', 'journal', twice.line);
+    for (const x of e.lines) {
+      if (!correct.has(x.key)) correct.set(x.key, { account: x.account, net: 0, lines: [] });
+      const c = correct.get(x.key), signed = x.side === 'D' ? x.amount : -x.amount;
+      c.net += signed; c.lines.push({ signed, entry: e.no, line: x.line, amount: x.amount });
+    }
+  }
+
+  const student = new Map(), trialRows = [];
+  (trialText || '').split('\n').forEach((l, i) => {
+    const p = parseLine(l, i + 1);
+    if (!p) return;
+    if (p.error) { add('err', `سطر لم يُفهم: ${p.raw}`, p.error, 'trial', p.line); return; }
+    if (!p.side) {
+      const n = classify(p.key, overrides).normal;
+      if (!n) { add('err', `«${p.account}»: الجانب غير محدد`, 'نوع الحساب غير معروف. أضف حرف م أو د بعد المبلغ.', 'trial', p.line); return; }
+      p.side = n;
+    }
+    if (student.has(p.key)) add('check', `«${p.account}» مكرر في الميزان`, 'جُمعت القيمتان. يظهر الحساب عادة مرة واحدة برصيده النهائي.', 'trial', p.line);
+    else student.set(p.key, { account: p.account, net: 0, line: p.line });
+    student.get(p.key).net += p.side === 'D' ? p.amount : -p.amount;
+    trialRows.push(p);
+  });
+
+  const hasJ = entries.length > 0, hasT = student.size > 0;
+  const aliases = new Map();
+  if (hasJ && hasT) {
+    const freeC = [...correct.keys()].filter(k => !student.has(k));
+    for (const k of [...student.keys()]) {
+      if (correct.has(k)) continue;
+      const hit = freeC.find(c => !aliases.has(c) && lev(c, k) <= (k.length >= 8 ? 2 : 1));
+      if (!hit) continue;
+      aliases.set(hit, k);
+      const s = student.get(k), c = correct.get(hit);
+      add('check', `اسم مختلف: «${s.account}» و«${c.account}»`, 'عُوملا على أنهما الحساب نفسه. راجع التسمية.', 'trial', s.line);
+      student.set(hit, s); student.delete(k);
+    }
+  }
+
+  const base = new Map();
+  if (hasT) for (const [k, v] of student) base.set(k, { account: v.account, net: v.net, line: v.line, box: 'trial' });
+  else for (const [k, v] of correct) if (v.net) base.set(k, { account: v.account, net: v.net, line: v.lines[0].line, box: 'journal' });
+
+  const flagged = new Set();
+  if (hasJ && hasT) {
+    for (const k of new Set([...correct.keys(), ...student.keys()])) {
+      const c = correct.get(k), s = student.get(k), cn = c ? c.net : 0, sn = s ? s.net : 0, delta = sn - cn;
+      if (!delta) continue;
+      flagged.add(k);
+      const name = `«${(s || c).account}»`;
+      if (!s) { add('err', `${name} غير موجود في الميزان`, `رصيده من القيود ${money(Math.abs(cn))} ${SIDE_LABEL[cn > 0 ? 'D' : 'C']}.`, 'journal', c.lines[0].line); base.set(k, { account: c.account, net: 0, line: c.lines[0].line, box: 'journal' }); continue; }
+      if (!c) { add('err', `${name} لا يظهر في أي قيد`, `مكتوب في الميزان بمبلغ ${money(Math.abs(sn))}. راجع الاسم أو القيد الناقص.`, 'trial', s.line); continue; }
+      const nowTxt = `في الميزان ${money(Math.abs(sn))} ${SIDE_LABEL[sn >= 0 ? 'D' : 'C']}، والصحيح ${money(Math.abs(cn))} ${SIDE_LABEL[cn >= 0 ? 'D' : 'C']}.`;
+      if (sn === -cn) { add('err', `${name} في الجانب المعكوس`, nowTxt, 'trial', s.line); continue; }
+      let done = false;
+      for (const x of c.lines) {
+        if (delta === -x.signed) { add('err', `${name}: القيد ${x.entry} غير مرحّل`, `${nowTxt} الفرق يساوي مبلغ هذا القيد.`, 'journal', x.line); done = true; break; }
+        if (delta === x.signed) { add('err', `${name}: القيد ${x.entry} مرحّل مرتين`, `${nowTxt} الفرق يساوي مبلغ هذا القيد.`, 'journal', x.line); done = true; break; }
+        if (delta === -2 * x.signed) { add('err', `${name}: القيد ${x.entry} مرحّل بالجانب المعاكس`, `${nowTxt} الفرق يساوي ضعف مبلغ القيد.`, 'journal', x.line); done = true; break; }
+        const t = Math.abs(x.signed + delta);
+        if (Math.sign(x.signed + delta) === Math.sign(x.signed) && isSwap(x.amount, t)) { add('err', `${name}: مبلغ القيد ${x.entry} مرحّل بأرقام مقلوبة`, `${nowTxt} يبدو أن ${money(x.amount)} نُقل على أنه ${money(t)}.`, 'journal', x.line); done = true; break; }
+      }
+      if (done) continue;
+      if (isSwap(Math.abs(sn), Math.abs(cn))) add('err', `${name}: أرقام مقلوبة`, nowTxt, 'trial', s.line);
+      else if (isSlide(Math.abs(sn), Math.abs(cn))) add('err', `${name}: خطأ في المنزلة`, nowTxt, 'trial', s.line);
+      else add('err', `${name}: الرصيد غير صحيح`, `${nowTxt} الفرق ${money(Math.abs(delta))}. راجع جمع هذا الحساب.`, 'trial', s.line);
+    }
+    if (unbalancedEntries) add('check', 'الأرصدة الصحيحة تعتمد على القيود', 'صحّح القيود غير المتوازنة أولاً، فقد تتغير نتيجة المطابقة.', 'journal', undefined);
+  }
+
+  const rows = [];
+  let TD = 0, TC = 0;
+  for (const [k, v] of base) {
+    const c = classify(k, overrides), side = v.net >= 0 ? 'D' : 'C';
+    rows.push({ key: k, account: v.account, cls: c.cls, normal: c.normal, net: v.net, correct: hasJ && hasT ? (correct.get(k) ? correct.get(k).net : 0) : null, bad: flagged.has(k), line: v.line, box: v.box });
+    if (v.net > 0) TD += v.net; else TC -= v.net;
+  }
+  const S = TD - TC;
+
+  const abnormal = rows.filter(r => r.net && r.normal && (r.net > 0 ? 'D' : 'C') !== r.normal);
+  for (const r of abnormal) {
+    if (flagged.has(r.key)) continue;
+    add(hasT ? 'likely' : 'check', `«${r.account}» رصيده في غير جانبه`, `رصيده ${SIDE_LABEL[r.net > 0 ? 'D' : 'C']}، والمعتاد لهذا الحساب أن يكون ${SIDE_LABEL[r.normal]}.`, r.box, r.line);
+  }
+
+  if (hasT && !hasJ && S) {
+    const abn = new Set(abnormal.map(r => r.key));
+    const hintRows = rows.filter(r => r.net).map(r => ({ account: r.account, side: r.net > 0 ? 'D' : 'C', amount: Math.abs(r.net), line: r.line, abnormal: abn.has(r.key) }));
+    let hints = diffHints(S, hintRows);
+    const fixAll = abnormal.reduce((a, r) => a + 2 * r.net, 0), rest = S - fixAll;
+    if (abnormal.length && rest !== S) {
+      if (rest === 0) { if (abnormal.length > 1) add('likely', 'تصحيح جوانب هذه الحسابات يوازن الميزان', 'الحسابات المذكورة أعلاه تفسر الفرق كاملاً.', 'trial', abnormal[0].line); }
+      else hints = hints.concat(diffHints(rest, hintRows.filter(r => !r.abnormal)));
+    }
+    const seen = new Set();
+    hints.forEach(h => { if (!seen.has(h.title)) { seen.add(h.title); add(h.lv, h.title, h.body, 'trial', h.line); } });
+    const abs = Math.abs(S);
+    if (!hints.length && !abnormal.length) {
+      if (abs % 900 === 0) add('check', `الفرق ${money(abs)} يقبل القسمة على 9`, 'هذا النمط يأتي غالباً من قلب رقمين أو خطأ في المنزلة. راجع نقل المبالغ رقماً رقماً.', 'trial', undefined);
+      else add('check', `الفرق ${money(abs)} لا يطابق نمطاً معروفاً`, 'قد يكون في الميزان أكثر من خطأ. أدخل القيود ليُطابَق كل حساب على حدة.', 'journal', undefined);
+    }
+  }
+
+  const sum = c => rows.filter(r => r.cls === c).reduce((a, r) => a + r.net, 0);
+  const eq = { A: sum('A'), L: -sum('L'), E: -sum('E'), NI: -sum('R') - sum('X'), U: sum('U') };
+  const order = { err: 0, likely: 1, check: 2 };
+  findings.sort((a, b) => order[a.lv] - order[b.lv]);
+  return { findings, rows, TD, TC, S, eq, hasJ, hasT, entries: entries.length };
+}
+//LOGIC-END
+
+const SAMPLE = {
+  title: 'مثال: منشأة تجارية',
+  journal: 'م الصندوق 50000\nد رأس المال 50000\n\nم الأثاث 12000\nد الصندوق 12000\n\nم البضاعة 18000\nد الموردون 18000\n\nم الصندوق 9500\nد المبيعات 9500\n\nم الرواتب 2400\nد الصندوق 2400',
+  trial: 'الصندوق 45010 م\nالأثاث 12000 م\nالبضاعة 18000 م\nرأس المال 50000 د\nالموردون 18000 د\nالمبيعات 9500 د\nالرواتب 2400 د',
+};
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const LV = { err: 'خطأ', likely: 'مرجّح', check: 'راجعه' };
+const LOCAL_KEY = 'mizan-problems-v1';
+
+const problems = new Map();
+let current, coll = null, saveTimer = null, chain = Promise.resolve(), touched = false, delArmed = null;
+const newId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const blank = () => ({ id: newId(), title: 'مسألة ' + (problems.size + 1), journal: '', trial: '', classes: {}, updatedAt: 0 });
+const setStatus = t => { $('status').textContent = t; };
+
+function readLocal() { try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]'); } catch (e) { return []; } }
+function writeLocal() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify([...problems.values()])); } catch (e) {} }
+
+function persist(p) {
+  const body = { title: p.title, journal: p.journal, trial: p.trial, classes: p.classes, updatedAt: p.updatedAt };
+  chain = chain.then(async () => {
+    if (!coll) { writeLocal(); setStatus('محفوظة على هذا الجهاز'); return; }
+    try { await coll.doc(p.id).set(body); setStatus('محفوظة'); }
+    catch (e) { writeLocal(); setStatus('تعذر الحفظ في الحساب، وحُفظت على هذا الجهاز'); }
+  });
+}
+function flush() { if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; persist(current); } }
+function edited() {
+  touched = true; current.updatedAt = Date.now();
+  const first = !problems.has(current.id);
+  problems.set(current.id, current);
+  if (first) renderPicker();
+  setStatus('جارٍ الحفظ…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveTimer = null; persist(current); }, 800);
+}
+
+function renderPicker() {
+  const list = [...problems.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  if (!problems.has(current.id)) list.unshift(current);
+  $('picker').innerHTML = list.map(p => `<option value="${esc(p.id)}">${esc(p.title || 'بدون اسم')}</option>`).join('');
+  $('picker').value = current.id;
+}
+function openProblem(p) {
+  flush(); current = p; disarm();
+  $('title').value = p.title; $('journal').value = p.journal; $('trial').value = p.trial;
+  renderPicker(); render();
+}
+function disarm() { clearTimeout(delArmed); delArmed = null; $('del').textContent = 'حذف'; $('del').classList.remove('danger'); }
+
+let last;
+function render() {
+  const r = last = analyze(current.journal, current.trial, current.classes);
+  const empty = !r.hasJ && !r.hasT && !r.findings.length;
+  const errs = r.findings.filter(f => f.lv === 'err').length, others = r.findings.length - errs;
+  const v = $('verdict');
+  let head, cls;
+  if (empty) { cls = ''; head = 'اكتب أول قيد لتظهر النتيجة'; }
+  else if (r.S) { cls = 'bad'; head = `الميزان لا يتوازن، والفرق ${money(Math.abs(r.S))}`; }
+  else if (errs) { cls = 'bad'; head = `الميزان متوازن لكن فيه ${errs === 1 ? 'خطأ واحد' : errs === 2 ? 'خطأين' : errs + ' أخطاء'}`; }
+  else if (others) { cls = 'warn'; head = 'الميزان متوازن، وبقيت نقاط للمراجعة'; }
+  else { cls = 'ok'; head = 'الميزان متوازن ولا يظهر خطأ'; }
+  v.className = 'verdict ' + cls;
+  v.innerHTML = `<h2>${esc(head)}</h2>` + (empty ? '<p class="sub">النتيجة تظهر أثناء الكتابة.</p>' :
+    `<div class="figs"><div class="fig"><span>مجموع المدين</span><b>${money(r.TD)}</b></div><div class="fig"><span>مجموع الدائن</span><b>${money(r.TC)}</b></div><div class="fig"><span>القيود</span><b>${r.entries}</b></div><div class="fig"><span>الحسابات</span><b>${r.rows.length}</b></div></div>`);
+
+  $('findings').innerHTML = r.findings.length ? `<ul class="finds">${r.findings.map(f => {
+    const inner = `<span class="chip ${f.lv}">${LV[f.lv]}</span><span class="find-t">${esc(f.title)}</span><span class="find-b">${esc(f.body)}${f.line ? ' <span class="find-go">انتقل للسطر</span>' : ''}</span>`;
+    return `<li class="find">${f.line ? `<button type="button" class="find-in" data-box="${f.box}" data-line="${f.line}">${inner}</button>` : `<div class="find-in">${inner}</div>`}</li>`;
+  }).join('')}</ul>` : `<p class="none">${empty ? 'ستظهر هنا الأخطاء مع مكان كل منها.' : (r.hasT && r.hasJ ? 'كل حساب في الميزان يطابق القيود.' : r.hasJ ? 'كل القيود متوازنة. أضف الميزان الذي حللته ليُطابَق عليها.' : 'الميزان متوازن. أضف القيود لكشف الأخطاء التي لا تغيّر المجموع، كحذف قيد كامل.')}</p>`;
+
+  $('tableTitle').textContent = r.hasT ? 'الميزان الذي حللته' : 'ميزان المراجعة المستخرج من القيود';
+  const cmp = r.hasJ && r.hasT;
+  const opts = sel => Object.keys(CLASS_LABEL).map(k => `<option value="${k}"${k === sel ? ' selected' : ''}>${CLASS_LABEL[k]}</option>`).join('');
+  $('table').innerHTML = !r.rows.length ? '<p class="none">ستظهر الحسابات وأرصدتها هنا.</p>' :
+    `<table><thead><tr><th>الحساب</th><th>النوع</th><th class="n">مدين</th><th class="n">دائن</th>${cmp ? '<th class="n">من القيود</th><th>الحالة</th>' : ''}</tr></thead><tbody>${r.rows.map(x =>
+      `<tr class="${x.bad ? 'bad' : ''}"><td class="nm">${esc(x.account)}</td><td><select data-key="${esc(x.key)}" aria-label="نوع ${esc(x.account)}" class="${x.cls === 'U' ? 'unk' : ''}">${opts(x.cls)}</select></td><td class="n">${x.net > 0 ? money(x.net) : ''}</td><td class="n">${x.net < 0 ? money(-x.net) : ''}</td>${cmp ? `<td class="n">${x.correct ? money(Math.abs(x.correct)) + ' ' + (x.correct > 0 ? 'م' : 'د') : '—'}</td><td><span class="chip ${x.bad ? 'err' : 'good'}">${x.bad ? 'خطأ' : 'مطابق'}</span></td>` : ''}</tr>`).join('')}</tbody><tfoot><tr><td colspan="2">المجموع</td><td class="n">${money(r.TD)}</td><td class="n">${money(r.TC)}</td>${cmp ? '<td></td><td></td>' : ''}</tr></tfoot></table>`;
+
+  const fig = (l, c) => `<div class="fig"><span>${l}</span><b>${c < 0 ? '(' + money(-c) + ')' : money(c)}</b></div>`;
+  $('eq').innerHTML = !r.rows.length ? '<p class="none">الأصول = الخصوم + حقوق الملكية + صافي الربح</p>' :
+    fig('الأصول', r.eq.A) + '<i>=</i>' + fig('الخصوم', r.eq.L) + '<i>+</i>' + fig('حقوق الملكية', r.eq.E) + '<i>+</i>' + fig('صافي الربح', r.eq.NI) + (r.eq.U ? fig('غير مصنف', r.eq.U) : '');
+}
+
+function jump(box, line) {
+  const ta = $(box), rows = ta.value.split('\n');
+  let start = 0;
+  for (let i = 0; i < line - 1 && i < rows.length; i++) start += rows[i].length + 1;
+  ta.focus({ preventScroll: true });
+  ta.setSelectionRange(start, start + (rows[line - 1] || '').length);
+  ta.scrollTop = Math.max(0, (line - 3) * 30);
+  ta.scrollIntoView({ block: 'center' });
+}
+
+let timer;
+for (const box of ['journal', 'trial']) $(box).addEventListener('input', e => {
+  current[box] = e.target.value; edited();
+  clearTimeout(timer); timer = setTimeout(render, 90);
+});
+$('title').addEventListener('input', e => { current.title = e.target.value; edited(); renderPicker(); });
+$('picker').addEventListener('change', e => { const p = problems.get(e.target.value); if (p) openProblem(p); });
+$('new').addEventListener('click', () => { openProblem(blank()); $('journal').focus(); });
+$('sample').addEventListener('click', () => openProblem({ ...blank(), ...SAMPLE, classes: {} }));
+$('del').addEventListener('click', () => {
+  if (!delArmed) { $('del').textContent = 'تأكيد الحذف'; $('del').classList.add('danger'); delArmed = setTimeout(disarm, 4000); return; }
+  clearTimeout(saveTimer); saveTimer = null;
+  const id = current.id, had = problems.delete(id);
+  if (had) {
+    writeLocalIfNeeded();
+    if (coll) chain = chain.then(() => coll.doc(id).delete()).catch(() => setStatus('تعذر الحذف من الحساب'));
+  }
+  const next = [...problems.values()].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  openProblem(next || blank());
+  setStatus('حُذفت المسألة');
+});
+function writeLocalIfNeeded() { if (!coll || readLocal().length) writeLocal(); }
+$('findings').addEventListener('click', e => { const b = e.target.closest('[data-line]'); if (b) jump(b.dataset.box, +b.dataset.line); });
+$('table').addEventListener('change', e => {
+  const k = e.target.dataset.key; if (!k) return;
+  current.classes = { ...current.classes, [k]: e.target.value }; edited(); render();
+});
+
+async function boot() {
+  current = { ...blank(), ...SAMPLE, classes: {} };
+  openProblem(current);
+  let db = null, user = null;
+  try {
+    if (window.claude && window.claude.use) [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
+  } catch (e) {}
+  const uid = user ? await user.id() : null;
+  const local = readLocal();
+  let loaded = [];
+  if (db && uid) {
+    coll = db.collection('data/users/' + uid);
+    try {
+      const snap = await Promise.race([coll.get(), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 10000))]);
+      loaded = snap.docs.map(d => ({ id: d.id, classes: {}, ...d.data() }));
+      setStatus(loaded.length ? 'تم تحميل مسائلك' : 'جاهز للحفظ');
+    } catch (e) { setStatus('تعذر تحميل المسائل المحفوظة'); }
+  } else setStatus('الحفظ على هذا الجهاز');
+  for (const p of [...local, ...loaded]) if (p && p.id && (!problems.has(p.id) || problems.get(p.id).updatedAt < p.updatedAt)) { if (p.id !== current.id) problems.set(p.id, p); }
+  if (!touched && problems.size) openProblem([...problems.values()].sort((a, b) => b.updatedAt - a.updatedAt)[0]);
+  else renderPicker();
+}
+boot();
+</script>
+</body>
+</html>
