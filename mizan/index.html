@@ -128,6 +128,21 @@ button.find-in:hover { background: var(--paper); }
 .t-sum b { font-weight: 600; padding: 3px 6px; font-size: 13.5px; }
 .t-bal { margin: 2px 0 0; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--accent); }
 
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.seg button { background: var(--sheet); border: 0; padding: 4px 16px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+#ledSum:empty { display: none; }
+#ledger { display: grid; gap: 10px; }
+.t-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.t-in textarea { background: none; background-image: none; border: 0; border-radius: 0; padding: 4px 6px; font-size: 14px; line-height: 24px; resize: vertical; min-height: 80px; }
+.t-in textarea + textarea { border-inline-start: 2px solid var(--ink); }
+.t-balrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; border-top: 1px solid var(--ink); padding-top: 6px; font-size: 13.5px; }
+.t-balrow label { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.t-balrow input { width: 96px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 6px; }
+.t-balrow select { background: var(--sheet); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 4px; }
+.t-fb { display: flex; flex-wrap: wrap; gap: 3px 8px; align-items: baseline; padding-top: 6px; min-height: 26px; }
+.t-msg { font-size: 13px; color: var(--muted); }
+
 table.stmt td { white-space: normal; }
 table.stmt + table.stmt { margin-top: 12px; }
 table.stmt tr.grp td { font-weight: 600; color: var(--accent); border-bottom: 1px solid var(--rule); padding-top: 12px; }
@@ -212,7 +227,17 @@ td select.unk { border-color: var(--warn); color: var(--warn); }
         <button type="button" role="tab" data-tab="ledger" aria-selected="false">دفتر الأستاذ</button>
         <button type="button" role="tab" data-tab="fin" aria-selected="false">القوائم المالية</button>
       </div>
-      <div class="sheet" id="tab-ledger" hidden><h2>دفتر الأستاذ</h2><div id="ledger"></div></div>
+      <div class="sheet" id="tab-ledger" hidden>
+        <div class="ex-head">
+          <h2>دفتر الأستاذ</h2>
+          <div class="seg" id="ledMode" role="group" aria-label="طريقة تعبئة دفتر الأستاذ">
+            <button type="button" data-mode="auto" aria-pressed="true">تلقائي</button>
+            <button type="button" data-mode="manual" aria-pressed="false">يدوي</button>
+          </div>
+        </div>
+        <p class="sub" id="ledSum" role="status"></p>
+        <div id="ledger"></div>
+      </div>
       <div class="col" id="tab-fin" hidden>
         <div class="sheet">
           <div class="ei-row">
@@ -525,6 +550,44 @@ function buildLedger(journalText) {
   }
   return [...map.values()];
 }
+function amountsIn(text) {
+  return [...normDigits(text || '').matchAll(/\d[\d,]*(?:\.\d+)?/g)].map(m => Math.round(parseFloat(m[0].replace(/,/g, '')) * 100)).filter(x => x > 0);
+}
+function bagDiff(a, b) {
+  const rest = [...b];
+  return a.filter(x => { const i = rest.indexOf(x); if (i < 0) return true; rest.splice(i, 1); return false; });
+}
+/* acc comes from buildLedger; entry is what the student typed: {d, c, bal, side}. */
+function checkLedgerAccount(acc, entry) {
+  const e = entry || {}, amounts = s => acc.rows.filter(r => r.side === s).map(r => r.amount);
+  const gotD = amountsIn(e.d), gotC = amountsIn(e.c), balTxt = String(e.bal || '').trim();
+  if (!gotD.length && !gotC.length && !balTxt) return { status: 'empty', msgs: [] };
+  const msgs = []; let wrong = false, incomplete = false;
+  let missD = bagDiff(amounts('D'), gotD), missC = bagDiff(amounts('C'), gotC);
+  for (const x of bagDiff(gotD, amounts('D'))) {
+    wrong = true;
+    const i = missC.indexOf(x);
+    if (i >= 0) { missC.splice(i, 1); msgs.push(`${money(x)} مكانه الجانب الدائن.`); }
+    else msgs.push(`${money(x)} ليس من حركات الجانب المدين.`);
+  }
+  for (const x of bagDiff(gotC, amounts('C'))) {
+    wrong = true;
+    const i = missD.indexOf(x);
+    if (i >= 0) { missD.splice(i, 1); msgs.push(`${money(x)} مكانه الجانب المدين.`); }
+    else msgs.push(`${money(x)} ليس من حركات الجانب الدائن.`);
+  }
+  const left = (n, name) => n === 1 ? `بقي مبلغ واحد في ${name}.` : n === 2 ? `بقي مبلغان في ${name}.` : `بقيت ${n} مبالغ في ${name}.`;
+  if (missD.length) { incomplete = true; msgs.push(left(missD.length, 'المدين')); }
+  if (missC.length) { incomplete = true; msgs.push(left(missC.length, 'الدائن')); }
+  const net = acc.D - acc.C, bal = parseAmount(balTxt), side = net > 0 ? 'D' : 'C';
+  if (!balTxt) { if (net) { incomplete = true; msgs.push('اكتب رصيد الحساب.'); } }
+  else if (Number.isNaN(bal)) { wrong = true; msgs.push('اكتب الرصيد رقماً فقط.'); }
+  else if (!net) { if (bal) { wrong = true; msgs.push('هذا الحساب رصيده صفر.'); } }
+  else if (bal !== Math.abs(net)) { wrong = true; msgs.push('قيمة الرصيد غير صحيحة. اطرح المجموع الأصغر من الأكبر.'); }
+  else if (!e.side) { incomplete = true; msgs.push('حدد جانب الرصيد.'); }
+  else if (e.side !== side) { wrong = true; msgs.push('جانب الرصيد غير صحيح. الرصيد يكون في جهة المجموع الأكبر.'); }
+  return { status: wrong ? 'bad' : incomplete ? 'partial' : 'ok', msgs };
+}
 function parseAmount(s) {
   const t = normDigits(String(s == null ? '' : s)).trim();
   if (!t) return null;
@@ -752,7 +815,7 @@ const LV = { err: 'خطأ', likely: 'مرجّح', check: 'راجعه' };
 const LOCAL_KEY = 'mizan-problems-v1';
 
 const problems = new Map();
-let current, coll = null, saveTimer = null, chain = Promise.resolve(), touched = false, showSol = false;
+let current, coll = null, saveTimer = null, chain = Promise.resolve(), touched = false, showSol = false, ledgerSig = null;
 const newId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const blank = () => ({ id: newId(), title: 'مسألة ' + (problems.size + 1), journal: '', trial: '', classes: {}, updatedAt: 0 });
 const setStatus = t => { $('status').textContent = t; };
@@ -761,7 +824,7 @@ function readLocal() { try { return JSON.parse(localStorage.getItem(LOCAL_KEY) |
 function writeLocal() { try { localStorage.setItem(LOCAL_KEY, JSON.stringify([...problems.values()])); } catch (e) {} }
 
 function persist(p) {
-  const body = { title: p.title, journal: p.journal, trial: p.trial, classes: p.classes, updatedAt: p.updatedAt, exId: p.exId || null, endInv: p.endInv || '' };
+  const body = { title: p.title, journal: p.journal, trial: p.trial, classes: p.classes, updatedAt: p.updatedAt, exId: p.exId || null, endInv: p.endInv || '', ledger: p.ledger || {}, ledMode: p.ledMode || 'auto' };
   chain = chain.then(async () => {
     if (!coll) { writeLocal(); setStatus('محفوظة على هذا الجهاز'); return; }
     try { await coll.doc(p.id).set(body); setStatus('محفوظة'); }
@@ -786,7 +849,7 @@ function renderPicker() {
   $('picker').value = current.id;
 }
 function openProblem(p) {
-  flush(); current = p; showSol = false;
+  flush(); current = p; showSol = false; ledgerSig = null;
   $('title').value = p.title; $('journal').value = p.journal; $('trial').value = p.trial; $('endInv').value = p.endInv || '';
   renderPicker(); render();
 }
@@ -870,14 +933,40 @@ function render() {
   renderEx(ex, chk);
   renderBooks(r);
 }
+function renderManual(led) {
+  const box = $('ledger');
+  if (!led.length) { ledgerSig = null; $('ledSum').textContent = ''; box.innerHTML = '<p class="none">اكتب القيود أولاً لتظهر الحسابات المطلوب ترحيلها.</p>'; return; }
+  const data = current.ledger || {}, sig = led.map(a => a.key).join('|');
+  if (sig !== ledgerSig) {
+    ledgerSig = sig;
+    box.innerHTML = `<p class="sub">اكتب مبلغ كل حركة في سطر، ثم الرصيد وجانبه.</p><div class="t-wrap">${led.map(a => {
+      const e = data[a.key] || {}, n = esc(a.account);
+      const opt = (v, t) => `<option value="${v}"${(e.side || '') === v ? ' selected' : ''}>${t}</option>`;
+      return `<article class="t" data-acc="${esc(a.key)}"><h3>${n}</h3><div class="t-labels"><span>مدين</span><span>دائن</span></div><div class="t-in"><textarea data-f="d" rows="3" spellcheck="false" inputmode="text" aria-label="مبالغ مدين ${n}">${esc(e.d || '')}</textarea><textarea data-f="c" rows="3" spellcheck="false" inputmode="text" aria-label="مبالغ دائن ${n}">${esc(e.c || '')}</textarea></div><div class="t-balrow"><label>الرصيد <input data-f="bal" inputmode="decimal" autocomplete="off" value="${esc(e.bal || '')}"></label><select data-f="side" aria-label="جانب رصيد ${n}">${opt('', 'الجانب')}${opt('D', 'مدين')}${opt('C', 'دائن')}</select></div><div class="t-fb"></div></article>`;
+    }).join('')}</div>`;
+  }
+  const cards = box.querySelectorAll('.t'), LABEL = { ok: ['good', 'صحيح'], partial: ['likely', 'ناقص'], bad: ['err', 'خطأ'] };
+  let ok = 0;
+  led.forEach((a, i) => {
+    const res = checkLedgerAccount(a, data[a.key]);
+    if (res.status === 'ok') ok++;
+    cards[i].querySelector('.t-fb').innerHTML = res.status === 'empty' ? '' : `<span class="chip ${LABEL[res.status][0]}">${LABEL[res.status][1]}</span>${res.msgs.map(m => `<span class="t-msg">${esc(m)}</span>`).join('')}`;
+  });
+  $('ledSum').textContent = `${ok} من ${led.length} حسابات صحيحة`;
+}
 function renderBooks(r) {
   const side = rows => rows.map(x => `<button type="button" class="t-row" data-box="journal" data-line="${x.line}"><span class="t-n">${money(x.amount)}</span><span class="t-o">${esc(x.other)} <small>ق${x.entry}</small></span></button>`).join('');
   const led = buildLedger(current.journal);
+  const mode = current.ledMode === 'manual' ? 'manual' : 'auto';
+  for (const b of $('ledMode').querySelectorAll('[data-mode]')) b.setAttribute('aria-pressed', b.dataset.mode === mode ? 'true' : 'false');
+  if (mode === 'manual') renderManual(led);
+  else { ledgerSig = null; $('ledSum').textContent = '';
   $('ledger').innerHTML = !led.length ? '<p class="none">اكتب القيود ليظهر كل حساب هنا بحركاته ورصيده.</p>' :
     `<div class="t-wrap">${led.map(a => {
       const net = a.D - a.C;
       return `<article class="t"><h3>${esc(a.account)}</h3><div class="t-labels"><span>مدين</span><span>دائن</span></div><div class="t-body"><div>${side(a.rows.filter(x => x.side === 'D'))}</div><div>${side(a.rows.filter(x => x.side === 'C'))}</div></div><div class="t-sum"><b>${money(a.D)}</b><b>${money(a.C)}</b></div><p class="t-bal">${net ? `الرصيد ${money(Math.abs(net))} ${SIDE_LABEL[net > 0 ? 'D' : 'C']}` : 'الحساب مقفل، رصيده صفر'}</p></article>`;
     }).join('')}</div>`;
+  }
 
   const src = r.hasJ ? analyze(current.journal, '', current.classes) : r;
   const parsedEI = parseAmount(current.endInv), badEI = Number.isNaN(parsedEI), ei = badEI ? null : parsedEI;
@@ -951,7 +1040,17 @@ $('endInv').addEventListener('input', e => {
   current.endInv = e.target.value; edited();
   clearTimeout(timer); timer = setTimeout(render, 90);
 });
-twoStep('clear', 'تأكيد التفريغ', () => { current.endInv = ''; $('endInv').value = ''; setAnswer('', ''); $('journal').focus(); setStatus('فُرّغت الخانات'); }, () => current.journal || current.trial || current.endInv);
+$('ledMode').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (!b) return;
+  current.ledMode = b.dataset.mode; ledgerSig = null; edited(); render();
+});
+$('ledger').addEventListener('input', e => {
+  const el = e.target.closest('[data-f]'); if (!el) return;
+  const k = el.closest('[data-acc]').dataset.acc, all = current.ledger || {};
+  current.ledger = { ...all, [k]: { ...(all[k] || {}), [el.dataset.f]: el.value } };
+  edited(); renderManual(buildLedger(current.journal));
+});
+twoStep('clear', 'تأكيد التفريغ', () => { current.endInv = ''; $('endInv').value = ''; current.ledger = {}; ledgerSig = null; setAnswer('', ''); $('journal').focus(); setStatus('فُرّغت الخانات'); }, () => current.journal || current.trial || current.endInv || Object.keys(current.ledger || {}).length);
 twoStep('fillSol', 'تأكيد الاستبدال', () => { const x = EX_BY_ID[current.exId]; if (x) setAnswer(x.sol, current.trial); }, () => current.journal);
 twoStep('del', 'تأكيد الحذف', () => {
   clearTimeout(saveTimer); saveTimer = null;
