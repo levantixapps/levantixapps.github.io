@@ -108,6 +108,32 @@ button.find-in:hover { background: var(--paper); }
 .sol { display: grid; gap: 8px; }
 .sol pre { margin: 0; font-family: var(--body); background: var(--paper); border-radius: 3px; padding: 8px 12px; white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
 
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 2px solid var(--rule); }
+.tabs button { background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 7px 14px; cursor: pointer; font-weight: 500; color: var(--muted); }
+.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+.t-wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: 22px 24px; }
+.t { min-width: 0; display: grid; align-content: start; }
+.t h3 { margin: 0; font-family: var(--display); font-size: 16px; font-weight: 600; text-align: center; }
+.t-labels, .t-sum { display: grid; grid-template-columns: 1fr 1fr; }
+.t-labels { font-size: 12px; color: var(--muted); text-align: center; border-bottom: 2px solid var(--ink); }
+.t-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 44px; }
+.t-body > div + div { border-inline-start: 2px solid var(--ink); }
+.t-row { display: flex; justify-content: space-between; gap: 6px; width: 100%; background: none; border: 0; padding: 3px 6px; cursor: pointer; text-align: right; font-size: 13.5px; }
+.t-row:hover { background: var(--paper); }
+.t-n { font-weight: 500; }
+.t-o { color: var(--muted); font-size: 12.5px; min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.t-o small { font-size: 11px; }
+.t-sum { border-top: 1px solid var(--ink); }
+.t-sum b { font-weight: 600; padding: 3px 6px; font-size: 13.5px; }
+.t-bal { margin: 2px 0 0; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--accent); }
+
+table.stmt td { white-space: normal; }
+table.stmt + table.stmt { margin-top: 12px; }
+table.stmt tr.grp td { font-weight: 600; color: var(--accent); border-bottom: 1px solid var(--rule); padding-top: 12px; }
+table.stmt tr.sub td { font-weight: 600; }
+.notes { margin: 4px 0 0; padding-inline-start: 18px; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+
 .scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -176,9 +202,18 @@ td select.unk { border-color: var(--warn); color: var(--warn); }
 
     <section class="col" aria-label="النتيجة">
       <div class="verdict" id="verdict"></div>
+      <div class="tabs" id="tabs" role="tablist" aria-label="عرض النتائج">
+        <button type="button" role="tab" data-tab="check" aria-selected="true">الأخطاء والميزان</button>
+        <button type="button" role="tab" data-tab="ledger" aria-selected="false">دفتر الأستاذ</button>
+        <button type="button" role="tab" data-tab="fin" aria-selected="false">القوائم المالية</button>
+      </div>
+      <div class="sheet" id="tab-ledger" hidden><h2>دفتر الأستاذ</h2><div id="ledger"></div></div>
+      <div class="col" id="tab-fin" hidden><div class="col" id="fin"></div></div>
+      <div class="col" id="tab-check">
       <div class="sheet"><h2>أين الخطأ</h2><div id="findings"></div></div>
       <div class="sheet"><h2 id="tableTitle">ميزان المراجعة</h2><div class="scroll" id="table"></div></div>
       <div class="sheet"><h2>المعادلة المحاسبية</h2><div class="eq" id="eq"></div></div>
+      </div>
     </section>
   </main>
 </div>
@@ -462,6 +497,28 @@ function analyze(journalText, trialText, overrides) {
   const order = { err: 0, likely: 1, check: 2 };
   findings.sort((a, b) => order[a.lv] - order[b.lv]);
   return { findings, rows, TD, TC, S, eq, hasJ, hasT, entries: entries.length };
+}
+function buildLedger(journalText) {
+  const map = new Map();
+  for (const e of parseJournal(journalText || '').entries) {
+    for (const x of e.lines) {
+      if (!map.has(x.key)) map.set(x.key, { key: x.key, account: x.account, rows: [], D: 0, C: 0 });
+      const a = map.get(x.key), others = e.lines.filter(o => o.side !== x.side);
+      a.rows.push({ side: x.side, amount: x.amount, entry: e.no, line: x.line, other: others.length === 1 ? others[0].account : others.length ? 'مذكورين' : '—' });
+      a[x.side] += x.amount;
+    }
+  }
+  return [...map.values()];
+}
+function buildStatements(rows) {
+  const pick = (c, sign) => rows.filter(r => r.cls === c && r.net).map(r => ({ account: r.account, amt: sign * r.net }));
+  const total = l => l.reduce((a, x) => a + x.amt, 0);
+  const rev = pick('R', -1), exp = pick('X', 1), assets = pick('A', 1), liab = pick('L', -1), capital = pick('E', -1);
+  const unknown = rows.filter(r => r.cls === 'U' && r.net);
+  const TR = total(rev), TX = total(exp), NI = TR - TX;
+  const equity = capital.concat(rows.some(r => r.net && (r.cls === 'R' || r.cls === 'X')) ? [{ account: NI < 0 ? 'صافي خسارة الفترة' : 'صافي ربح الفترة', amt: NI }] : []);
+  const TA = total(assets), TL = total(liab), TE = total(equity);
+  return { rev, exp, TR, TX, NI, assets, liab, equity, TA, TL, TE, TLE: TL + TE, unknown, purchases: rows.some(r => r.net && r.key.includes('مشتريات')) };
 }
 const LEVELS = ['مبتدئ', 'متوسط', 'متقدم'];
 const EX_DATA = [
@@ -774,6 +831,35 @@ function render() {
   $('eq').innerHTML = !r.rows.length ? '<p class="none">الأصول = الخصوم + حقوق الملكية + صافي الربح</p>' :
     fig('الأصول', r.eq.A) + '<i>=</i>' + fig('الخصوم', r.eq.L) + '<i>+</i>' + fig('حقوق الملكية', r.eq.E) + '<i>+</i>' + fig('صافي الربح', r.eq.NI) + (r.eq.U ? fig('غير مصنف', r.eq.U) : '');
   renderEx(ex, chk);
+  renderBooks(r);
+}
+function renderBooks(r) {
+  const side = rows => rows.map(x => `<button type="button" class="t-row" data-box="journal" data-line="${x.line}"><span class="t-n">${money(x.amount)}</span><span class="t-o">${esc(x.other)} <small>ق${x.entry}</small></span></button>`).join('');
+  const led = buildLedger(current.journal);
+  $('ledger').innerHTML = !led.length ? '<p class="none">اكتب القيود ليظهر كل حساب هنا بحركاته ورصيده.</p>' :
+    `<div class="t-wrap">${led.map(a => {
+      const net = a.D - a.C;
+      return `<article class="t"><h3>${esc(a.account)}</h3><div class="t-labels"><span>مدين</span><span>دائن</span></div><div class="t-body"><div>${side(a.rows.filter(x => x.side === 'D'))}</div><div>${side(a.rows.filter(x => x.side === 'C'))}</div></div><div class="t-sum"><b>${money(a.D)}</b><b>${money(a.C)}</b></div><p class="t-bal">${net ? `الرصيد ${money(Math.abs(net))} ${SIDE_LABEL[net > 0 ? 'D' : 'C']}` : 'الحساب مقفل، رصيده صفر'}</p></article>`;
+    }).join('')}</div>`;
+
+  const src = r.hasJ ? analyze(current.journal, '', current.classes) : r;
+  const f = buildStatements(src.rows);
+  const amt = c => c < 0 ? `(${money(-c)})` : money(c);
+  const rowsOf = l => l.map(x => `<tr><td>${esc(x.account)}</td><td class="n">${amt(x.amt)}</td></tr>`).join('');
+  const group = t => `<tr class="grp"><td colspan="2">${t}</td></tr>`;
+  const sub = (t, c) => `<tr class="sub"><td>${t}</td><td class="n">${amt(c)}</td></tr>`;
+  if (!src.rows.length) {
+    $('fin').innerHTML = '<div class="sheet"><p class="none">اكتب القيود لتظهر قائمة الدخل والميزانية العمومية.</p></div>';
+    return;
+  }
+  const notes = [];
+  notes.push(r.hasJ ? 'محسوبة تلقائياً من خانة القيود.' : 'محسوبة من الميزان الذي كتبته، لعدم وجود قيود.');
+  if (src.S) notes.push(`القيود غير متوازنة بفرق ${money(Math.abs(src.S))}، فالقوائم غير نهائية حتى تصحيحها.`);
+  if (f.unknown.length) notes.push(`لم تدخل في القوائم حسابات غير معروفة النوع: ${f.unknown.map(u => u.account).join('، ')}. حدد نوعها من جدول الميزان.`);
+  if (f.purchases) notes.push('ظهرت المشتريات ضمن المصروفات، ولم يُحتسب مخزون آخر المدة لأنه غير مدخل، فقد يختلف الربح عن حل الكتاب.');
+  const balanced = f.TA === f.TLE;
+  $('fin').innerHTML = `<div class="sheet"><h2>قائمة الدخل</h2><div class="scroll"><table class="stmt"><tbody>${group('الإيرادات')}${rowsOf(f.rev)}${sub('مجموع الإيرادات', f.TR)}${group('المصروفات')}${rowsOf(f.exp)}${sub('مجموع المصروفات', f.TX)}</tbody><tfoot><tr><td>${f.NI < 0 ? 'صافي الخسارة' : 'صافي الربح'}</td><td class="n">${amt(f.NI)}</td></tr></tfoot></table></div></div>
+  <div class="sheet"><div class="ex-head"><h2>الميزانية العمومية</h2><span class="chip ${balanced ? 'good' : 'err'}">${balanced ? 'متوازنة' : 'غير متوازنة'}</span></div><div class="scroll"><table class="stmt"><tbody>${group('الأصول')}${rowsOf(f.assets)}</tbody><tfoot><tr><td>مجموع الأصول</td><td class="n">${amt(f.TA)}</td></tr></tfoot></table><table class="stmt"><tbody>${group('الخصوم')}${rowsOf(f.liab)}${sub('مجموع الخصوم', f.TL)}${group('حقوق الملكية')}${rowsOf(f.equity)}${sub('مجموع حقوق الملكية', f.TE)}</tbody><tfoot><tr><td>مجموع الخصوم وحقوق الملكية</td><td class="n">${amt(f.TLE)}</td></tr></tfoot></table></div><ul class="notes">${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>`;
 }
 
 function jump(box, line) {
@@ -795,6 +881,15 @@ $('title').addEventListener('input', e => { current.title = e.target.value; edit
 $('picker').addEventListener('change', e => { const p = problems.get(e.target.value); if (p) openProblem(p); });
 $('new').addEventListener('click', () => { openProblem(blank()); $('journal').focus(); });
 $('sample').addEventListener('click', () => openProblem({ ...blank(), ...SAMPLE, classes: {} }));
+$('tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if (!b) return;
+  for (const t of $('tabs').querySelectorAll('[data-tab]')) {
+    const on = t === b;
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+    $('tab-' + t.dataset.tab).hidden = !on;
+  }
+});
+$('tab-ledger').addEventListener('click', e => { const b = e.target.closest('[data-line]'); if (b) jump(b.dataset.box, +b.dataset.line); });
 $('exPick').addEventListener('change', e => { const x = EX_BY_ID[e.target.value]; if (x) openExercise(x); });
 const stepEx = d => {
   const i = EXERCISES.findIndex(e => e.id === current.exId);
